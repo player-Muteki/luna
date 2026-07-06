@@ -29,3 +29,6 @@ vectorstore/
 
 # Logs
 *.log
+
+# Plans / Specs
+plans/
