@@ -1,5 +1,19 @@
 # Changelog
 
+## [v0.0.6] - 2026-07-08
+
+### 🐛 Bug Fixes
+- 修复 Windows 终端 GBK 编码不支持 emoji 导致 `co-thinker start` 崩溃的问题
+  - cli.py 中所有 emoji（🔌📂📄⚠️❌✅🎉⏳👋）替换为 ASCII 文本（`[PORT]` `[DIR]` `[OK]` `[WARN]` `[ERROR]` 等）
+- 修复 Streamlit 首次启动弹出交互式邮箱提示导致 Windows 下卡住的问题
+  - 添加 `--server.headless true` 命令行参数
+
+### ✨ Features
+- 新增 `install.ps1`：Windows PowerShell 一键安装脚本
+- README 添加 Windows 安装说明
+
+---
+
 ## [v0.0.5] - 2026-07-07
 
 ### 🐛 Bug Fixes
@@ -116,6 +130,7 @@
 
 ---
 
+[v0.0.6]: https://github.com/player-Muteki/co-thinker/releases/tag/v0.0.6
 [v0.0.5]: https://github.com/player-Muteki/co-thinker/releases/tag/v0.0.5
 [v0.0.4]: https://github.com/player-Muteki/co-thinker/releases/tag/v0.0.4
 [v0.0.3]: https://github.com/player-Muteki/co-thinker/releases/tag/v0.0.3
