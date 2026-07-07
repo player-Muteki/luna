@@ -1,5 +1,28 @@
 # Changelog
 
+## [v0.0.5] - 2026-07-07
+
+### 🐛 Bug Fixes
+- 修复 `pyproject.toml` 缺少文档解析器依赖，导致 `install.sh` 安装后无法解析 .docx/.pdf/.pptx (python-docx / pymupdf / python-pptx)
+
+---
+
+## [v0.0.4] - 2026-07-07
+
+### 🧪 Testing
+- 新增 4 个损坏二进制文件解析测试
+- `tests/test_parser.py`：PDF/DOCX/PPTX 解析测试
+
+### 📦 Other
+- **Parser**: PDF/DOCX/PPTX 添加 200MiB 大文件限制
+- **Retriever**: CJK 字符范围扩展到 Extension A
+- **Retriever**: `_iter_records` 改用 `hasattr()` 替代 `try/except`
+- **Retriever**: BM25 预分词改用 `id()` 缓存避免突变 records 字典
+- **Generator**: 系统提示改为中英双语
+- **Deps**: 更新 lock 文件（parser 新依赖）
+
+---
+
 ## [v0.0.3] - 2026-07-07
 
 ### 🐛 Bug Fixes
@@ -93,6 +116,8 @@
 
 ---
 
+[v0.0.5]: https://github.com/player-Muteki/co-thinker/releases/tag/v0.0.5
+[v0.0.4]: https://github.com/player-Muteki/co-thinker/releases/tag/v0.0.4
 [v0.0.3]: https://github.com/player-Muteki/co-thinker/releases/tag/v0.0.3
 [v0.0.2]: https://github.com/player-Muteki/co-thinker/releases/tag/v0.0.2
 [v0.0.1]: https://github.com/player-Muteki/co-thinker/releases/tag/v0.0.1
