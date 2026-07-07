@@ -17,11 +17,29 @@
 
 ## 安装
 
+### Linux / macOS
+
 一条命令安装 Co-Thinker：
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/player-Muteki/co-thinker/main/install.sh | bash
 ```
+
+### Windows
+
+以管理员身份打开 PowerShell，执行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/player-Muteki/co-thinker/main/install.ps1 | iex"
+```
+
+或手动下载后执行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File install.ps1
+```
+
+### 启动
 
 安装完成后，在新目录中初始化项目并启动：
 
@@ -52,7 +70,8 @@ co-thinker/
 ├── requirements.lock       # 精确版本锁
 ├── .python-version         # Python 版本锁定
 ├── .env.example            # 环境变量模板
-├── setup.sh                # 一键环境设置
+├── setup.sh                # 一键环境设置（Linux/macOS）
+├── install.ps1             # 一键安装脚本（Windows PowerShell）
 └── README.md
 ```
 

@@ -52,13 +52,13 @@ def _find_streamlit_app() -> Path:
 
     When installed (``pip install``), cli.py and app/ are both under
     site-packages.  When run from source, both are under the project root.
-    In either case ``parent / "app" / …`` resolves correctly.
+    In either case ``parent / "app" / ...`` resolves correctly.
     """
     candidate = Path(__file__).resolve().parent / "app" / "streamlit_app.py"
     if candidate.exists():
         return candidate
     raise typer.Exit(
-        "❌ 找不到 app/streamlit_app.py。"
+        "[ERROR] 找不到 app/streamlit_app.py。"
         "请确认 Co-Thinker 已正确安装 (pip install) 或在项目根目录下运行。"
     )
 
@@ -79,13 +79,13 @@ def _prompt_env(cwd: Path) -> Path | None:
     if env_path.exists():
         return env_path
 
-    typer.echo("⚠️  未检测到 .env 文件。")
+    typer.echo("[WARN] 未检测到 .env 文件。")
     if not typer.confirm("  是否现在创建？（需要填入 DeepSeek API Key）", default=True):
         return None
 
     api_key = typer.prompt("  DeepSeek API Key", hide_input=True)
     if not api_key:
-        typer.echo("  ⏭ 跳过，稍后可手动创建 .env")
+        typer.echo("  [SKIP] 跳过，稍后可手动创建 .env")
         return None
 
     template = f"""# Co-Thinker 配置 — 由 `co-thinker init` 自动生成
@@ -110,7 +110,7 @@ MAX_HISTORY_TURNS=10
 LOG_LEVEL=INFO
 """
     env_path.write_text(template, encoding="utf-8")
-    typer.echo(f"  ✅ .env 已创建: {env_path}")
+    typer.echo(f"  [OK] .env 已创建: {env_path}")
     return env_path
 
 
@@ -129,20 +129,20 @@ def init(
     cwd.mkdir(parents=True, exist_ok=True)
 
     print(_banner(__version__))
-    typer.echo(f"📂 工作目录: {cwd}")
+    typer.echo(f"[DIR] 工作目录: {cwd}")
     typer.echo("")
 
     _ensure_runtime_dirs(cwd)
-    typer.echo("✅ 已创建: data/  vectorstore/  storage/")
+    typer.echo("[OK] 已创建: data/  vectorstore/  storage/")
 
     env_path = cwd / ".env"
     if env_path.exists():
-        typer.echo(f"✅ 已存在: .env")
+        typer.echo(f"[OK] 已存在: .env")
     else:
         _prompt_env(cwd)
 
     typer.echo("")
-    typer.echo("🎉 初始化完成！运行 co-thinker start 启动 Web 界面。")
+    typer.echo("[DONE] 初始化完成！运行 co-thinker start 启动 Web 界面。")
 
 
 @app.command()
@@ -156,9 +156,9 @@ def start(
     cwd = Path.cwd().resolve()
 
     print(_banner(__version__))
-    typer.echo(f"🔌 端口: {port}")
-    typer.echo(f"📂 工作目录: {cwd}")
-    typer.echo(f"📄 应用入口: {streamlit_app}")
+    typer.echo(f"[PORT] 端口: {port}")
+    typer.echo(f"[DIR] 工作目录: {cwd}")
+    typer.echo(f"[APP] 应用入口: {streamlit_app}")
     typer.echo("")
 
     # 确保运行时目录存在
@@ -169,11 +169,11 @@ def start(
     if dotenv_path.exists():
         if load_dotenv is not None:
             load_dotenv(dotenv_path=dotenv_path, override=True)
-            typer.echo(f"📄 已加载: {dotenv_path}")
+            typer.echo(f"[ENV] 已加载: {dotenv_path}")
         else:
-            typer.echo("⚠️  python-dotenv 未安装，请 pip install python-dotenv")
+            typer.echo("[WARN] python-dotenv 未安装，请 pip install python-dotenv")
     else:
-        typer.echo("⚠️  工作目录中未找到 .env 文件。")
+        typer.echo("[WARN] 工作目录中未找到 .env 文件。")
         typer.echo("   运行 co-thinker init 来创建，或手动创建 .env 后重试。")
         typer.echo("   当前会尝试读取已有的环境变量。")
         typer.echo("")
@@ -188,6 +188,8 @@ def start(
         str(streamlit_app),
         "--server.port",
         str(port),
+        "--server.headless",
+        "true",
     ]
     if debug:
         cmd.extend(["--logger.level", "debug"])
@@ -200,17 +202,17 @@ def start(
         webbrowser.open(f"http://localhost:{port}")
 
     try:
-        typer.echo("⏳ 正在启动...")
+        typer.echo("[START] 正在启动...")
         process = subprocess.Popen(cmd, cwd=str(cwd), env=env)
         process.wait()
     except KeyboardInterrupt:
-        typer.echo("\n👋 关闭中...")
+        typer.echo("\n[EXIT] 关闭中...")
         process.terminate()
         try:
             process.wait(timeout=5)
         except subprocess.TimeoutExpired:
             process.kill()
-        typer.echo("✅ Co-Thinker 已关闭")
+        typer.echo("[OK] Co-Thinker 已关闭")
 
 
 @app.command()
