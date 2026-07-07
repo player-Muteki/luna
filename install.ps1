@@ -10,22 +10,19 @@
 
 $WheelPath = if ($args) { $args[0] } else { "" }
 
-$Banner = @"
-  ____          _   _   _           _
- / ___|___   __| | | |_| |__  _ __ | | _____ _ __
-| |   / _ \ / _` | | __| '_ \| '_ \| |/ / _ \ '__|
-| |__| (_) | (_| | | |_| | | | | | |   <  __/ |
- \____\___/ \__,_|  \__|_| |_|_| |_|_|\_\___|_|
-
-  Co-Thinker v0.0.5 - Windows 安装脚本
-"@
-
 function Write-Step($msg) { Write-Host "`n>>> $msg" -ForegroundColor Cyan }
 function Write-Info($msg)  { Write-Host "[OK] $msg" -ForegroundColor Green }
 function Write-Warn($msg) { Write-Host "[WARN] $msg" -ForegroundColor Yellow }
 function Write-Error($msg){ Write-Host "[ERROR] $msg" -ForegroundColor Red }
 
-Write-Host $Banner
+Write-Host ""
+Write-Host "  ____          _   _   _           _"
+Write-Host " / ___|___   __| | | |_| |__  _ __ | | _____ _ __"
+Write-Host "| |   / _ \ / _` | | __| '_ \| '_ \| |/ / _ \ '__|"
+Write-Host "| |__| (_) | (_| | | |_| | | | | |   <  __/ |"
+Write-Host " \____\___/ \__,_|  \__|_| |_|_| |_|_|\_\___|_|"
+Write-Host ""
+Write-Host "  Co-Thinker v0.0.5 - Windows 安装脚本"
 
 # ── 参数处理：本地 .whl 或自动下载 ──────────────────────────
 if ($WheelPath -and (Test-Path $WheelPath)) {
