@@ -26,9 +26,11 @@ Thumbs.db
 data/
 uploads/
 vectorstore/
+storage/
 
 # Logs
 *.log
 
 # Plans / Specs
 plans/
+.deepseek/

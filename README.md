@@ -13,3 +13,10 @@
 - RAG 答案生成（大模型 + 检索上下文，支持多轮对话连贯性）
 - 多轮对话上下文记录
 - 可视化交互界面
+
+## 本地启动
+
+1. 安装依赖：`pip install -r requirements.txt`
+2. 复制配置模板：`cp .env.example .env`
+3. 在 `.env` 中填写 `DEEPSEEK_API_KEY`
+4. 启动应用：`streamlit run app/streamlit_app.py`
