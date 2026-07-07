@@ -1,4 +1,4 @@
-﻿# Co-Thinker 一键安装脚本（Windows PowerShell）
+# Co-Thinker 一键安装脚本（Windows PowerShell）
 # 从 GitHub 下载最新 .whl 包并安装到专用虚拟环境。
 # 安装后 co-thinker 命令全局可用。
 #

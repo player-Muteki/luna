@@ -30,8 +30,8 @@ curl -sSL https://raw.githubusercontent.com/player-Muteki/co-thinker/main/instal
 以管理员身份打开 PowerShell，执行以下任一命令：
 
 ```powershell
-# 方式一（推荐 - 使用 curl.exe）
-powershell -ExecutionPolicy Bypass -c "$c=(curl.exe -sSL https://raw.githubusercontent.com/player-Muteki/co-thinker/main/install.ps1) -join [char]10; iex $c"
+# 方式一（推荐 - 使用 curl.exe，单引号避免变量展开）
+powershell -ExecutionPolicy Bypass -c 'iex ((curl.exe -sSL https://raw.githubusercontent.com/player-Muteki/co-thinker/main/install.ps1) -join [char]10)'
 
 # 方式二（使用 irm，一行即可）
 powershell -ExecutionPolicy Bypass -c "iex (irm https://raw.githubusercontent.com/player-Muteki/co-thinker/main/install.ps1)"
