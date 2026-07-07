@@ -378,7 +378,7 @@ def render_chat_tab() -> None:
                 answer_placeholder.markdown(full_answer)
             except Exception as exc:
                 logger.error("Stream generation failed: %s", exc)
-                full_answer = generator._friendly_error_message(exc)
+                full_answer = generator.friendly_error_message(exc)
                 generation_elapsed_ms = (time.perf_counter() - stream_start) * 1000
                 st.markdown(full_answer)
         else:

@@ -28,7 +28,7 @@ vectorstore/
 storage/
 
 # Data (sampled knowledge docs — keep in git, remove if sample is too large)
-# data/  # uncomment if data files are generated/downloaded, not source-controlled
+data/  # uncomment if data files are generated/downloaded, not source-controlled
 
 # Logs
 *.log

@@ -80,7 +80,7 @@ def load_settings(overrides: dict[str, Any] | None = None) -> Settings:
         max_history_turns=_get_int("MAX_HISTORY_TURNS", 10),
         log_level=_get_str("LOG_LEVEL", "INFO"),
         embedding_model_name=_get_str("EMBEDDING_MODEL_NAME", ""),
-        embedding_base_url=_get_str("EMBEDDING_BASE_URL", "https://api.openai.com/v1"),
+        embedding_base_url=_get_str("EMBEDDING_BASE_URL", ""),
     )
     if not overrides:
         return settings
@@ -181,8 +181,9 @@ def get_embedding_model(settings: Settings) -> Any | None:
     """
     if not settings.embedding_model_name:
         return None
+    base_url = settings.embedding_base_url or "https://api.openai.com/v1"
     return OpenAIEmbeddingModel(
         model_name=settings.embedding_model_name,
-        base_url=settings.embedding_base_url,
+        base_url=base_url,
         api_key=settings.deepseek_api_key,
     )

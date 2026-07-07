@@ -6,38 +6,7 @@ from app.ingest import IngestionEngine
 from app.retriever import HybridRetriever
 from config import ensure_directories, load_settings
 
-
-class FakeEmbeddingModel:
-    def get_text_embedding_batch(self, texts: list[str]) -> list[list[float]]:
-        return [self.get_text_embedding(text) for text in texts]
-
-    def get_text_embedding(self, text: str) -> list[float]:
-        text = text.lower()
-        return [
-            1.0 if "retrieval" in text or "检索" in text else 0.0,
-            1.0 if "generator" in text or "生成" in text else 0.0,
-            1.0 if "config" in text or "配置" in text else 0.0,
-        ]
-
-    def get_query_embedding(self, query: str) -> list[float]:
-        return self.get_text_embedding(query)
-
-
-def make_settings(tmp_path: Path):
-    settings = load_settings(
-        overrides={
-            "data_dir": tmp_path / "data",
-            "vectorstore_dir": tmp_path / "vectorstore",
-            "storage_dir": tmp_path / "storage",
-            "chunk_size": 400,
-            "chunk_overlap": 20,
-            "top_k": 5,
-            "retrieval_candidate_k": 10,
-            "similarity_cutoff": 0.0,
-        }
-    )
-    ensure_directories(settings)
-    return settings
+from .conftest import FakeEmbeddingModel, make_settings
 
 
 def build_engine_and_retriever(tmp_path: Path):
@@ -81,6 +50,35 @@ def test_bm25_retrieve_finds_exact_symbol_terms(tmp_path: Path) -> None:
     assert results.results
     assert results.results[0].file_name == "config.txt"
     assert results.results[0].bm25_score is not None
+
+
+def test_bm25_idf_cache_reuses_on_same_data(tmp_path: Path) -> None:
+    _, _, retriever = build_engine_and_retriever(tmp_path)
+
+    # First call builds the cache
+    results1 = retriever.retrieve("retrieval", mode="bm25")
+    n_after_first = retriever._idf_n
+
+    # Second call should reuse cache
+    results2 = retriever.retrieve("retrieval", mode="bm25")
+    assert retriever._idf_n == n_after_first
+    assert retriever._idf_cache is not None
+    assert results1.results
+    assert results2.results
+
+
+def test_bm25_idf_cache_invalidate_forces_rebuild(tmp_path: Path) -> None:
+    _, _, retriever = build_engine_and_retriever(tmp_path)
+
+    retriever.retrieve("retrieval", mode="bm25")
+    retriever.invalidate_idf_cache()
+
+    assert retriever._idf_cache is None
+    assert retriever._idf_n == 0
+
+    # Rebuild on next call
+    retriever.retrieve("retrieval", mode="bm25")
+    assert retriever._idf_cache is not None
 
 
 def test_hybrid_fusion_deduplicates_same_chunk(tmp_path: Path) -> None:

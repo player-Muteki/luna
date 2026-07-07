@@ -3,141 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 
 from app.generator import NO_RESULT_MESSAGE, RAGGenerator
-from app.ingest import IngestionEngine
-from app.retriever import HybridRetriever
 from config import ensure_directories, load_settings
 
-
-class FakeEmbeddingModel:
-    def get_text_embedding_batch(self, texts: list[str]) -> list[list[float]]:
-        return [self.get_text_embedding(text) for text in texts]
-
-    def get_text_embedding(self, text: str) -> list[float]:
-        text = text.lower()
-        return [
-            1.0 if "retrieval" in text else 0.0,
-            1.0 if "generator" in text else 0.0,
-            1.0 if "config" in text else 0.0,
-        ]
-
-    def get_query_embedding(self, query: str) -> list[float]:
-        return self.get_text_embedding(query)
-
-
-class _Choice:
-    """Mock a single chat completion choice."""
-    def __init__(self, content: str, for_stream: bool = False):
-        if for_stream:
-            # Streaming chunks only have a delta, no message field
-            self.delta = _Delta(content)
-        else:
-            # Non-streaming responses only have a message, no delta field
-            self.message = _Message(content)
-
-
-class _Message:
-    def __init__(self, content: str):
-        self.content = content
-
-
-class _Delta:
-    def __init__(self, content: str):
-        self.content = content
-
-
-class _Chunk:
-    """Mock a streaming chunk — only delta, no message."""
-    def __init__(self, content: str):
-        self.choices = [_Choice(content, for_stream=True)]
-
-
-class _Response:
-    """Mock a non-streaming response."""
-    def __init__(self, content: str):
-        self.choices = [_Choice(content)]
-
-
-class _Chat:
-    """Mock llm.chat — provides .completions.create() matching openai SDK path."""
-
-    def __init__(self, sync_response: str = "", stream_chunks: list[_Chunk] | None = None):
-        self.completions = _Completions(sync_response, stream_chunks)
-
-
-class _Completions:
-    """Mock llm.chat.completions — matches openai's chat.completions.create()."""
-
-    def __init__(self, sync_response: str, stream_chunks: list[_Chunk] | None = None):
-        self._sync_response = sync_response
-        self._stream_chunks = stream_chunks
-
-    def create(self, model=None, messages=None, temperature=None, max_tokens=None, stream=False):
-        if stream:
-            return iter(self._stream_chunks or [_Chunk("")])
-        return _Response(self._sync_response)
-
-
-def _make_chat(sync: str, stream: list[_Chunk] | None = None) -> _Chat:
-    return _Chat(sync_response=sync, stream_chunks=stream or [_Chunk(sync)])
-
-
-class FakeLLM:
-    def __init__(self):
-        self.chat = _make_chat(
-            sync="回答基于检索上下文。[1]\n\n引用来源：\n[1] unknown",
-            stream=[_Chunk("回答基于检索上下文。[1]\n\n引用来源：\n[1] unknown")],
-        )
-
-
-class EmptyLLM:
-    def __init__(self):
-        self.chat = _make_chat(sync="")
-
-
-class StreamingLLM:
-    def __init__(self):
-        self.chat = _make_chat(
-            sync="第一段第二段",
-            stream=[_Chunk("第一段"), _Chunk("第二段")],
-        )
-
-
-def make_settings(tmp_path: Path):
-    settings = load_settings(
-        overrides={
-            "data_dir": tmp_path / "data",
-            "vectorstore_dir": tmp_path / "vectorstore",
-            "storage_dir": tmp_path / "storage",
-            "chunk_size": 400,
-            "chunk_overlap": 20,
-            "top_k": 5,
-            "retrieval_candidate_k": 10,
-            "similarity_cutoff": 0.0,
-            "deepseek_api_key": "sk-test-key",
-        }
-    )
-    ensure_directories(settings)
-    return settings
-
-
-def build_retrieval_results(tmp_path: Path, query: str = "retrieval"):
-    settings = make_settings(tmp_path)
-    embedding_model = FakeEmbeddingModel()
-    engine = IngestionEngine(settings, embedding_model=embedding_model)
-
-    (settings.data_dir / "retrieval.md").write_text(
-        "Hybrid retrieval combines vector retrieval with BM25 for better recall.",
-        encoding="utf-8",
-    )
-    (settings.data_dir / "generator.md").write_text(
-        "The generator builds answers from retrieved context and cites sources.",
-        encoding="utf-8",
-    )
-
-    engine.add_files(engine.scan_files())
-    retriever = HybridRetriever(settings, engine.vector_store, embedding_model=embedding_model)
-    results = retriever.retrieve(query, mode="hybrid")
-    return settings, results
+from .conftest import FakeEmbeddingModel, FakeLLM, EmptyLLM, StreamingLLM, make_settings, build_retrieval_results
 
 
 def test_generate_returns_no_result_without_context(tmp_path: Path) -> None:
@@ -174,6 +42,26 @@ def test_build_messages_includes_context_history_and_question(tmp_path: Path) ->
     assert "<chat_history>" in messages[1]["content"]
     assert "retrieval 是什么？" in messages[1]["content"]
     assert "用户: 先介绍一下 retrieval" in messages[1]["content"]
+
+
+def test_build_messages_low_confidence_uses_instructions_tag(tmp_path: Path) -> None:
+    """Low confidence should appear in <instructions> tag, not inside <context>."""
+    settings, results = build_retrieval_results(tmp_path)
+    generator = RAGGenerator(settings, llm=FakeLLM())
+
+    # Force low confidence
+    results.results[0].final_score = 0.1
+    results.__class__.confidence = property(lambda self: "low")
+
+    messages = generator.build_messages("retrieval 是什么？", results)
+
+    context_section = messages[1]["content"]
+    assert "<instructions>" in context_section
+    assert "检索结果相关性较低" in context_section
+    # Verify instructions come before context, not inside it
+    instr_index = context_section.index("<instructions>")
+    context_index = context_section.index("<context>")
+    assert instr_index < context_index, "<instructions> should precede <context>"
 
 
 def test_extract_references_returns_chunk_metadata(tmp_path: Path) -> None:

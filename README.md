@@ -62,10 +62,26 @@ mkdir -p vectorstore storage
 
 ```bash
 source .venv/bin/activate
+
+# 方式一（推荐）：通过 CLI 启动
+python cli.py start
+
+# 或指定端口
+python cli.py start --port 8080
+
+# 方式二：直接启动 Streamlit
 streamlit run app/streamlit_app.py
 ```
 
 > 首次使用前需创建 `.env`（从 `.env.example` 复制）并填写 `DEEPSEEK_API_KEY`。
+
+### CLI 命令
+
+```bash
+python cli.py start     # 启动 Web 界面
+python cli.py version    # 显示版本信息
+python cli.py --help     # 查看所有命令
+```
 
 ## 运行测试
 
@@ -119,6 +135,8 @@ co-thinker/
 │   ├── generator.py        # 答案生成
 │   ├── retriever.py        # 文档检索
 │   └── ingest.py           # 文档导入与索引
+├── cli.py                  # CLI 入口（启动 Web / 版本信息）
+├── __version__.py          # 版本号
 ├── data/                   # 知识库源文档（markdown/txt）
 ├── tests/                  # 测试
 ├── config.py               # 配置管理

@@ -10,19 +10,19 @@ logger = logging.getLogger(__name__)
 from app.retriever import RetrievalResults
 from config import Settings, validate_for_chat
 
-DEFAULT_RAG_SYSTEM_PROMPT = """你是 Co-Thinker，一个面向特定领域知识库的问答助手。
+DEFAULT_RAG_SYSTEM_PROMPT = """You are Co-Thinker, a Q&A assistant grounded in a domain-specific knowledge base.
 
-你必须遵守以下规则：
-1. 只能基于 <context> 中提供的知识库片段回答。
-2. 如果 <context> 没有足够信息，明确说"知识库中未找到足够信息"，不要编造。
-3. 回答中涉及事实、结论、步骤或代码说明时，应引用来源编号，例如 [1]、[2]。
-4. 如果多个片段互相矛盾，指出矛盾并分别列出来源。
-5. 对代码、配置名、文件路径保持原样，不要翻译或改写。
-6. 默认使用中文回答，除非用户明确要求其他语言。
-7. 保持结构清晰：先直接回答，再列出依据或步骤。
+You must follow these rules:
+1. Answer solely based on the knowledge base snippets provided in <context>.
+2. If <context> does not contain sufficient information, state clearly "No relevant information found in the knowledge base." Do not make up facts.
+3. When stating facts, conclusions, steps, or code explanations, cite source numbers such as [1], [2].
+4. If multiple snippets contradict each other, point out the contradiction and list the sources separately.
+5. Preserve code, configuration names, and file paths exactly as they appear — do not translate or rephrase them.
+6. Answer in the same language as the user's question. If the user writes in Chinese, answer in Chinese; if in English, answer in English.
+7. Keep responses structured: answer directly first, then provide supporting evidence or steps.
 """
 
-USER_PROMPT_TEMPLATE = """<context>
+USER_PROMPT_TEMPLATE = """{instructions}<context>
 {context}
 </context>
 
@@ -160,7 +160,7 @@ class RAGGenerator:
             )
         except Exception as exc:
             return GenerationResult(
-                answer=self._friendly_error_message(exc),
+                answer=self.friendly_error_message(exc),
                 references=references,
                 finish_reason="error",
                 elapsed_ms=(time.perf_counter() - started) * 1000,
@@ -202,7 +202,7 @@ class RAGGenerator:
                 if delta and delta.content:
                     yield delta.content
         except Exception as exc:
-            yield self._friendly_error_message(exc)
+            yield self.friendly_error_message(exc)
 
     def build_messages(
         self,
@@ -212,9 +212,11 @@ class RAGGenerator:
     ) -> list[dict[str, str]]:
         context = retrieval_results.to_context_text(token_budget=self.settings.context_token_budget)
         history = self.format_history(chat_history, self.settings.max_history_turns)
+        instructions = ""
         if retrieval_results.confidence == "low":
-            context = f"{LOW_CONFIDENCE_NOTICE}\n\n{context}"
+            instructions = f"<instructions>\n{LOW_CONFIDENCE_NOTICE}\n</instructions>\n\n"
         user_prompt = USER_PROMPT_TEMPLATE.format(
+            instructions=instructions,
             context=context,
             chat_history=history,
             question=query,
@@ -287,7 +289,7 @@ class RAGGenerator:
             ) if source_paths else "")
         )
 
-    def _friendly_error_message(self, error: Exception) -> str:
+    def friendly_error_message(self, error: Exception) -> str:
         message = str(error)
         msg_lower = message.lower()
 

@@ -6,19 +6,7 @@ from pathlib import Path
 from app.ingest import IngestionEngine
 from config import ensure_directories, load_settings
 
-
-def make_settings(tmp_path: Path):
-    settings = load_settings(
-        overrides={
-            "data_dir": tmp_path / "data",
-            "vectorstore_dir": tmp_path / "vectorstore",
-            "storage_dir": tmp_path / "storage",
-            "chunk_size": 40,
-            "chunk_overlap": 10,
-        }
-    )
-    ensure_directories(settings)
-    return settings
+from .conftest import make_settings
 
 
 def test_scan_files_filters_hidden_and_supported_extensions(tmp_path: Path) -> None:
@@ -36,7 +24,7 @@ def test_scan_files_filters_hidden_and_supported_extensions(tmp_path: Path) -> N
 
 
 def test_add_files_indexes_and_deduplicates(tmp_path: Path) -> None:
-    settings = make_settings(tmp_path)
+    settings = make_settings(tmp_path, chunk_size=40, chunk_overlap=10)
     source = settings.data_dir / "guide.md"
     source.write_text("A" * 120, encoding="utf-8")
 
@@ -51,7 +39,7 @@ def test_add_files_indexes_and_deduplicates(tmp_path: Path) -> None:
 
 
 def test_add_files_replaces_chunks_when_file_changes(tmp_path: Path) -> None:
-    settings = make_settings(tmp_path)
+    settings = make_settings(tmp_path, chunk_size=40, chunk_overlap=10)
     source = settings.data_dir / "guide.md"
     source.write_text("A" * 120, encoding="utf-8")
 
@@ -70,7 +58,7 @@ def test_add_files_replaces_chunks_when_file_changes(tmp_path: Path) -> None:
 
 
 def test_delete_file_removes_manifest_and_chunks(tmp_path: Path) -> None:
-    settings = make_settings(tmp_path)
+    settings = make_settings(tmp_path, chunk_size=40, chunk_overlap=10)
     source = settings.data_dir / "guide.md"
     source.write_text("content for deletion test", encoding="utf-8")
 

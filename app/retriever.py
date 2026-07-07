@@ -111,6 +111,10 @@ class HybridRetriever:
         self.embedding_model = embedding_model
         self.bm25_retriever = bm25_retriever
         self.query_rewriter = query_rewriter
+        # BM25 IDF cache — invalidated when record count changes
+        self._idf_cache: dict[str, float] | None = None
+        self._idf_avgdl: float = 0.0
+        self._idf_n: int = 0
 
     def retrieve(
         self,
@@ -203,23 +207,7 @@ class HybridRetriever:
         results: list[RetrievalResult] = []
 
         records = self._iter_records(filters)
-        idf = self._build_idf(records)
-
-        # Compute average document length (in tokens) for BM25 length normalization
-        total_dl = 0
-        doc_lengths = []
-        for record in records:
-            text = record.get("text", "")
-            metadata = record.get("metadata", {})
-            haystack = " ".join(
-                filter(None, [text, metadata.get("source_path", ""),
-                              metadata.get("file_name", ""),
-                              " ".join(metadata.get("tags", []))])
-            )
-            dl = len(tokenize(haystack))
-            doc_lengths.append(dl)
-            total_dl += dl
-        avgdl = total_dl / max(len(doc_lengths), 1)
+        idf, avgdl = self._get_or_build_idf(records)
 
         for record in records:
             score = self._bm25_score(query_tokens, record, idf, avgdl=avgdl)
@@ -342,17 +330,30 @@ class HybridRetriever:
         intersection = len(set(query_tokens) & set(text_tokens))
         return intersection / max(len(set(query_tokens)), 1)
 
-    @staticmethod
-    def _build_idf(records: list[dict[str, Any]]) -> dict[str, float]:
-        """Compute IDF (Inverse Document Frequency) across all records.
+    def invalidate_idf_cache(self) -> None:
+        """Force IDF cache to rebuild on next BM25 query.
 
-        Returns a dict mapping each token to its IDF weight.
-        Uses BM25 Okapi-style smoothing: log((N - df + 0.5) / (df + 0.5)).
+        Call this after ingesting or removing documents.
         """
+        self._idf_cache = None
+        self._idf_avgdl = 0.0
+        self._idf_n = 0
+
+    def _get_or_build_idf(self, records: list[dict[str, Any]]) -> tuple[dict[str, float], float]:
+        """Return cached IDF + avgdl if record count unchanged, else rebuild."""
+        if self._idf_cache is not None and len(records) == self._idf_n:
+            return self._idf_cache, self._idf_avgdl
+
+        # Build IDF
         N = len(records)
         if N == 0:
-            return {}
+            self._idf_cache = {}
+            self._idf_avgdl = 0.0
+            self._idf_n = 0
+            return self._idf_cache, self._idf_avgdl
+
         df: dict[str, int] = {}
+        total_dl = 0
         for record in records:
             text = record.get("text", "")
             metadata = record.get("metadata", {})
@@ -361,13 +362,21 @@ class HybridRetriever:
                               metadata.get("file_name", ""),
                               " ".join(metadata.get("tags", []))])
             )
-            seen = set(tokenize(haystack))
+            tokens = tokenize(haystack)
+            total_dl += len(tokens)
+            seen = set(tokens)
             for token in seen:
                 df[token] = df.get(token, 0) + 1
+
+        avgdl = total_dl / max(N, 1)
         idf: dict[str, float] = {}
         for token, doc_count in df.items():
             idf[token] = math.log(1.0 + (N - doc_count + 0.5) / (doc_count + 0.5))
-        return idf
+
+        self._idf_cache = idf
+        self._idf_avgdl = avgdl
+        self._idf_n = N
+        return self._idf_cache, self._idf_avgdl
 
     def _bm25_score(
         self,
