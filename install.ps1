@@ -1,19 +1,14 @@
-<#
-.SYNOPSIS
-    Co-Thinker 一键安装脚本（Windows PowerShell）
+﻿# Co-Thinker 一键安装脚本（Windows PowerShell）
+# 从 GitHub 下载最新 .whl 包并安装到专用虚拟环境。
+# 安装后 co-thinker 命令全局可用。
+#
+# 用法:
+#   powershell -ExecutionPolicy Bypass -File install.ps1
+#   powershell -ExecutionPolicy Bypass -File install.ps1 co_thinker-0.0.5-py3-none-any.whl
+# 在线安装（无需下载）:
+#   powershell -ExecutionPolicy Bypass -c "curl.exe -sSL https://.../install.ps1 | iex"
 
-.DESCRIPTION
-    从 GitHub 下载最新 .whl 包并安装到专用虚拟环境。
-    安装后 co-thinker 命令全局可用。
-
-    用法:
-        powershell -ExecutionPolicy Bypass -File install.ps1
-        powershell -ExecutionPolicy Bypass -File install.ps1 -WheelPath co_thinker-0.0.5-py3-none-any.whl
-#>
-
-param(
-    [string]$WheelPath = ""
-)
+$WheelPath = if ($args) { $args[0] } else { "" }
 
 $Banner = @"
   ____          _   _   _           _
@@ -115,7 +110,8 @@ if (-not (Test-Path $BinDir)) {
 
 $BatPath = Join-Path $BinDir "co-thinker.cmd"
 $CoThinkerExe = Join-Path $VenDir "Scripts\co-thinker.exe"
-"@echo off`r`n`"$CoThinkerExe`" %*" | Set-Content -Path $BatPath
+$batContent = "@echo off`r`n`"$CoThinkerExe`" %*"
+$batContent | Set-Content -Path $BatPath
 Write-Info "已创建入口: $BatPath"
 
 # ── 4. 检查 PATH ────────────────────────────────────────────
@@ -125,7 +121,8 @@ if ($UserPath -notlike "*$BinDir*") {
     Write-Warn "$BinDir 不在 PATH 中"
     Write-Host ""
     Write-Host "  自动添加到用户环境变量 PATH..."
-    [Environment]::SetEnvironmentVariable("Path", "$UserPath;$BinDir", "User")
+    $newPath = $UserPath + ";" + $BinDir
+    [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
     Write-Info "已添加，请重新打开终端后 co-thinker 命令即可使用"
 } else {
     Write-Info "PATH 已包含 $BinDir"
