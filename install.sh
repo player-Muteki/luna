@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # ============================================================
-# Co-Thinker 一键安装（Release 用户使用）
+# Co-Thinker 一键安装
 #
-# 从 GitHub Releases 下载 .whl 后执行:
-#   bash install.sh co_thinker-0.0.2-py3-none-any.whl
+# 用法:
+#   bash install.sh                    # 自动从 GitHub 下载最新版
+#   bash install.sh co_thinker-0.0.2-py3-none-any.whl  # 本地安装
 #
 # 安装后 co-thinker 命令全局可用。
 # ============================================================
@@ -19,19 +20,44 @@ warn()  { echo -e "${YELLOW}⚠${NC} $1"; }
 error() { echo -e "${RED}✗${NC} $1"; }
 step()  { echo -e "\n${BOLD}▶ $1${NC}"; }
 
-# ── 参数 ────────────────────────────────────────────────────
-if [[ $# -lt 1 ]]; then
-    echo "用法: bash install.sh <wheel文件>"
-    echo "示例: bash install.sh co_thinker-0.0.2-py3-none-any.whl"
-    exit 1
-fi
+# ── 可选：从 GitHub 自动下载 ───────────────────────────────
+REPO="player-Muteki/co-thinker"
 
-WHEEL="$1"
-if [[ ! -f "$WHEEL" ]]; then
-    error "找不到文件: $WHEEL"
+if [[ $# -ge 1 && -f "$1" ]]; then
+    WHEEL_PATH="$(realpath "$1")"
+elif [[ $# -eq 0 ]]; then
+    step "从 GitHub 获取最新版本"
+    info "仓库: $REPO"
+    API_URL="https://api.github.com/repos/$REPO/releases/latest"
+    if command -v curl &>/dev/null; then
+        RELEASE_DATA=$(curl -s "$API_URL")
+    elif command -v wget &>/dev/null; then
+        RELEASE_DATA=$(wget -q -O- "$API_URL")
+    else
+        error "需要 curl 或 wget"
+        exit 1
+    fi
+    # 查找 .whl 文件下载链接
+    WHEEL_URL=$(echo "$RELEASE_DATA" | grep -oP 'https://[^"]+\.whl' | head -1)
+    if [[ -z "$WHEEL_URL" ]]; then
+        error "没有找到 .whl 发布文件"
+        exit 1
+    fi
+    WHEEL_NAME=$(basename "$WHEEL_URL")
+    info "下载: $WHEEL_NAME"
+    if command -v curl &>/dev/null; then
+        curl -sSL -o "/tmp/$WHEEL_NAME" "$WHEEL_URL"
+    else
+        wget -q -O "/tmp/$WHEEL_NAME" "$WHEEL_URL"
+    fi
+    WHEEL_PATH="/tmp/$WHEEL_NAME"
+    info "下载完成"
+else
+    echo "用法:"
+    echo "  bash install.sh                        # 自动下载并安装"
+    echo "  bash install.sh co_thinker-0.0.2-...   # 从本地 .whl 安装"
     exit 1
 fi
-WHEEL_PATH="$(realpath "$WHEEL")"
 
 # ── 1. 检查 Python ──────────────────────────────────────────
 step "检查 Python"
