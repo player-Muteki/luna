@@ -10,16 +10,19 @@ logger = logging.getLogger(__name__)
 from app.retriever import RetrievalResults
 from config import Settings, validate_for_chat
 
-DEFAULT_RAG_SYSTEM_PROMPT = """You are Co-Thinker, a Q&A assistant grounded in a domain-specific knowledge base.
+DEFAULT_RAG_SYSTEM_PROMPT = """你是 Co-Thinker，一个基于领域知识库的问答助手。
+You are Co-Thinker, a Q&A assistant grounded in a domain-specific knowledge base.
 
-You must follow these rules:
-1. Answer solely based on the knowledge base snippets provided in <context>.
-2. If <context> does not contain sufficient information, state clearly "No relevant information found in the knowledge base." Do not make up facts.
-3. When stating facts, conclusions, steps, or code explanations, cite source numbers such as [1], [2].
-4. If multiple snippets contradict each other, point out the contradiction and list the sources separately.
-5. Preserve code, configuration names, and file paths exactly as they appear — do not translate or rephrase them.
-6. Answer in the same language as the user's question. If the user writes in Chinese, answer in Chinese; if in English, answer in English.
-7. Keep responses structured: answer directly first, then provide supporting evidence or steps.
+必须遵守以下规则：
+1.  仅基于 <context> 中提供的知识库片段来回答。
+2.  如果 <context> 中没有足够信息，请明确说"知识库中未找到相关信息"，不要编造事实。
+3.  陈述事实、结论、步骤或代码说明时，请标注来源编号如 [1]、[2]。
+4.  如果多个片段互相矛盾，指出矛盾点并分别列出来源。
+5.  保留代码、配置名和文件路径原样——不要翻译或改写。
+6.  用用户提问的语言回答。用户用中文则用中文回答，用英文则用英文回答。
+7.  保持结构化回复：先直接回答，再提供支撑证据或步骤。
+
+(English version of rules above — answer in the user's language.)
 """
 
 USER_PROMPT_TEMPLATE = """{instructions}<context>
@@ -85,8 +88,6 @@ def _llm_call_with_retry(
 
     Pattern inspired by DeepTutor's LLM retry configuration.
     """
-    import time as _time
-
     last_exc: Exception | None = None
     for attempt in range(max_retries):
         try:
@@ -107,14 +108,18 @@ def _llm_call_with_retry(
         except Exception as exc:
             last_exc = exc
             msg = str(exc).lower()
-            # Don't retry on auth errors or invalid model errors
-            if any(word in msg for word in ("api key", "authentication", "401", "model", "not found")):
+            # Don't retry on auth errors or invalid model errors.
+            # "model not found" / "model does not exist" — pair check to avoid
+            # false positives on legitimate error messages containing "model".
+            if any(word in msg for word in ("api key", "authentication", "401")):
+                raise
+            if ("model" in msg) and ("not" in msg) and ("found" in msg or "exist" in msg or "support" in msg):
                 raise
             if attempt < max_retries - 1:
                 delay = base_delay * (2 ** attempt)  # exponential backoff
                 logger.warning("LLM call failed (attempt %d/%d): %s. Retrying in %.1fs...",
                                attempt + 1, max_retries, exc, delay)
-                _time.sleep(delay)
+                time.sleep(delay)
     raise LLMRetryError(f"LLM call failed after {max_retries} retries: {last_exc}") from last_exc
 
 
@@ -245,7 +250,17 @@ class RAGGenerator:
             )
         return references
 
-    def format_history(self, chat_history: list[dict[str, Any]] | None, max_turns: int) -> str:
+    def format_history(
+        self,
+        chat_history: list[dict[str, Any]] | None,
+        max_turns: int,
+        per_msg_max_chars: int = 500,
+    ) -> str:
+        """Format chat history for the LLM prompt.
+
+        Each message is truncated to *per_msg_max_chars* to prevent large
+        code blocks or long references from consuming the context budget.
+        """
         if not chat_history:
             return ""
         recent = chat_history[-max_turns * 2 :]
@@ -253,8 +268,11 @@ class RAGGenerator:
         for message in recent:
             role = "用户" if message.get("role") == "user" else "助手"
             content = str(message.get("content", "")).strip()
-            if content:
-                lines.append(f"{role}: {content}")
+            if not content:
+                continue
+            if len(content) > per_msg_max_chars:
+                content = content[:per_msg_max_chars] + f"\n… [截断至 {per_msg_max_chars} 字符]"
+            lines.append(f"{role}: {content}")
         return "\n".join(lines)
 
     def _invoke_llm(self, messages: list[dict[str, str]]) -> str:

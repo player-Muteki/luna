@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from app.parser import DocumentParser, PARSER_REGISTRY
 from config import Settings, ensure_directories
@@ -187,8 +190,12 @@ class JsonVectorStore(VectorStore):
         tmp_path.replace(self.path)
 
     def upsert_chunks(self, chunks: list[ChunkRecord]) -> None:
+        """Insert or update chunks in memory.  Caller must call ``flush()`` to persist."""
         for chunk in chunks:
             self.records[chunk.chunk_id] = asdict(chunk)
+
+    def flush(self) -> None:
+        """Flush in-memory records to disk."""
         self._save()
 
     def delete_by_document_id(self, document_id: str) -> int:
@@ -357,7 +364,16 @@ class IngestionEngine:
                     )
                 )
 
+        self.vector_store.flush()
         elapsed_ms = (time.perf_counter() - started) * 1000
+        if total_chunks > 500:
+            logger.info(
+                "Imported %d chunks across %d files in %.0fms — "
+                "consider raising CHUNK_SIZE for fewer chunks with larger files.",
+                total_chunks,
+                indexed_files,
+                elapsed_ms,
+            )
         return IngestSummary(
             total_files=len(file_paths),
             indexed_files=indexed_files,
@@ -523,23 +539,28 @@ class IngestionEngine:
                 break
 
             # Compute overlap start within [end - overlap_chars, end)
-            overlap_candidate = max(end - overlap_chars, start + 1)
-            if overlap_candidate >= end:
-                overlap_candidate = end - 1
+            # The overlap window is the last O characters of the just-extracted
+            # chunk.  The next chunk starts somewhere inside this window so the
+            # boundaries of adjacent chunks overlap by (up to) overlap_chars.
+            overlap_window_start = max(end - overlap_chars, 0)
+            if overlap_window_start >= end:
+                overlap_window_start = end - 1
 
-            overlap_start = overlap_candidate
-            if overlap_start < len(text):
-                # Search for a clean break point *within* the overlap window only
-                next_paragraph = text.find("\n\n", overlap_start)
-                if start < next_paragraph < end:
+            overlap_start = overlap_window_start
+            if overlap_window_start < len(text):
+                # Search for a clean break point *within* the overlap window
+                next_paragraph = text.find("\n\n", overlap_window_start)
+                if overlap_window_start <= next_paragraph < end:
                     overlap_start = next_paragraph + 2
                 else:
-                    next_line = text.find("\n", overlap_start)
-                    if start < next_line < end:
+                    next_line = text.find("\n", overlap_window_start)
+                    if overlap_window_start <= next_line < end:
                         overlap_start = next_line + 1
 
             # Safety guard: always make forward progress
-            start = max(overlap_start, start + 1)
+            # Use at least 25% of target_chars to prevent degenerate tiny chunks
+            min_progress = max(1, target_chars // 4)
+            start = max(overlap_start, start + min_progress)
 
         return chunks
 

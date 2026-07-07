@@ -153,6 +153,39 @@ class TestPPTXParser:
         assert "B2" in result
 
 
+class TestCorruptFiles:
+    def test_corrupt_pdf_raises_value_error(self):
+        parser = PDFParser()
+        corrupt_bytes = b"not a real pdf content\x00\xff\xfe"
+        with pytest.raises(ValueError, match="corrupted|Unable to open"):
+            parser.parse(corrupt_bytes, ".pdf")
+
+    def test_corrupt_docx_raises_value_error(self):
+        parser = DocxParser()
+        corrupt_bytes = b"not a real docx\x00\xff\xfe"
+        with pytest.raises(ValueError, match="corrupted|Unable to open"):
+            parser.parse(corrupt_bytes, ".docx")
+
+    def test_corrupt_pptx_raises_value_error(self):
+        parser = PPTXParser()
+        corrupt_bytes = b"not a real pptx\x00\xff\xfe"
+        with pytest.raises(ValueError, match="corrupted|Unable to open"):
+            parser.parse(corrupt_bytes, ".pptx")
+
+    def test_empty_pdf_raises_no_error(self):
+        import fitz
+        import io
+
+        doc = fitz.open()
+        doc.new_page()
+        buf = io.BytesIO()
+        doc.save(buf)
+        doc.close()
+        parser = PDFParser()
+        result = parser.parse(buf.getvalue(), ".pdf")
+        assert result == ""
+
+
 class TestParserRegistry:
     def test_contains_text_extensions(self):
         for ext in TEXT_EXTENSIONS:

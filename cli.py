@@ -22,6 +22,11 @@ import typer
 
 from __version__ import __version__
 
+try:
+    from dotenv import load_dotenv
+except ImportError:  # pragma: no cover
+    load_dotenv = None
+
 BANNER = r"""
    ____          _   _   _           _
   / ___|___   __| | | |_| |__  _ __ | | _____ _ __
@@ -43,21 +48,15 @@ app = typer.Typer(
 
 
 def _find_streamlit_app() -> Path:
-    """Locate ``app/streamlit_app.py`` whether we are installed or in source tree."""
-    candidates = [
-        # Installed mode: cli.py is in site-packages/, app/ is sibling
-        Path(__file__).resolve().parent / "app" / "streamlit_app.py",
-        # Dev mode: cli.py is at project root, app/ is child
-        Path(__file__).resolve().parent / "app" / "streamlit_app.py",
-    ]
-    # Deduplicate (both resolve to same path in dev mode)
-    seen: set[Path] = set()
-    for candidate in candidates:
-        if candidate in seen:
-            continue
-        seen.add(candidate)
-        if candidate.exists():
-            return candidate
+    """Locate ``app/streamlit_app.py`` whether we are installed or in source tree.
+
+    When installed (``pip install``), cli.py and app/ are both under
+    site-packages.  When run from source, both are under the project root.
+    In either case ``parent / "app" / …`` resolves correctly.
+    """
+    candidate = Path(__file__).resolve().parent / "app" / "streamlit_app.py"
+    if candidate.exists():
+        return candidate
     raise typer.Exit(
         "❌ 找不到 app/streamlit_app.py。"
         "请确认 Co-Thinker 已正确安装 (pip install) 或在项目根目录下运行。"
@@ -165,13 +164,21 @@ def start(
     # 确保运行时目录存在
     _ensure_runtime_dirs(cwd)
 
-    # 检查 .env
-    env = os.environ.copy()
-    if not (cwd / ".env").exists():
+    # ── 优先从 .env 文件加载环境变量 ─────────────────────────
+    dotenv_path = cwd / ".env"
+    if dotenv_path.exists():
+        if load_dotenv is not None:
+            load_dotenv(dotenv_path=dotenv_path, override=True)
+            typer.echo(f"📄 已加载: {dotenv_path}")
+        else:
+            typer.echo("⚠️  python-dotenv 未安装，请 pip install python-dotenv")
+    else:
         typer.echo("⚠️  工作目录中未找到 .env 文件。")
         typer.echo("   运行 co-thinker init 来创建，或手动创建 .env 后重试。")
         typer.echo("   当前会尝试读取已有的环境变量。")
         typer.echo("")
+
+    env = os.environ.copy()
 
     cmd = [
         sys.executable,

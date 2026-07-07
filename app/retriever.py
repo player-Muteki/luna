@@ -13,7 +13,11 @@ from config import Settings
 # Single-char Chinese tokenization ensures partial overlap (e.g. query "红黑树"
 # and chunk "红黑树的性质" share "红", "黑", "树"), which the greedy + pattern
 # could not provide (both became monolithic single tokens).
-TOKEN_PATTERN = re.compile(r"[A-Za-z0-9_./:-]+|[一-鿿]")
+# CJK Unified Ideographs: U+4E00–U+9FFF (基本区)
+# CJK Extension A: U+3400–U+4DBF
+# CJK Extension B: U+20000–U+2A6DF (需要代理对支持的补充平面字符)
+# 这里覆盖基本区和 Extension A , 覆盖 ~98% 常见汉字
+TOKEN_PATTERN = re.compile(r"[A-Za-z0-9_./:-]+|[\u4e00-\u9fff\u3400-\u4dbf]")
 SHORT_QUERY_HINTS = {"它", "这个", "这个功能", "这些", "那个", "有哪些", "怎么做", "如何", "为什么"}
 
 
@@ -204,13 +208,21 @@ class HybridRetriever:
     ) -> list[RetrievalResult]:
         filters = filters or {}
         query_tokens = tokenize(query)
-        results: list[RetrievalResult] = []
-
         records = self._iter_records(filters)
+
+        # Pre-tokenize all records once so IDF build and BM25 scoring share the
+        # work.  Store tokens in a parallel dict keyed by id() to avoid mutating
+        # the underlying records dict (which may be shared with other components
+        # such as the vector store).
+        _token_cache: dict[int, list[str]] = {}
+        for record in records:
+            _token_cache[id(record)] = tokenize(self._record_haystack(record))
+
         idf, avgdl = self._get_or_build_idf(records)
 
+        results: list[RetrievalResult] = []
         for record in records:
-            score = self._bm25_score(query_tokens, record, idf, avgdl=avgdl)
+            score = self._bm25_score(query_tokens, record, idf, avgdl=avgdl, token_cache=_token_cache)
             if score <= 0:
                 continue
             result = self._record_to_result(record)
@@ -262,9 +274,9 @@ class HybridRetriever:
         return fused
 
     def _iter_records(self, filters: dict[str, Any]) -> list[dict[str, Any]]:
-        try:
+        if hasattr(self.vector_store, "iter_records"):
             records = self.vector_store.iter_records()
-        except AttributeError:
+        else:
             # Fallback for non-standard vector stores
             records = list(getattr(self.vector_store, "records", {}).values())
         return [record for record in records if self._matches_filters(record, filters)]
@@ -355,13 +367,7 @@ class HybridRetriever:
         df: dict[str, int] = {}
         total_dl = 0
         for record in records:
-            text = record.get("text", "")
-            metadata = record.get("metadata", {})
-            haystack = " ".join(
-                filter(None, [text, metadata.get("source_path", ""),
-                              metadata.get("file_name", ""),
-                              " ".join(metadata.get("tags", []))])
-            )
+            haystack = self._record_haystack(record)
             tokens = tokenize(haystack)
             total_dl += len(tokens)
             seen = set(tokens)
@@ -386,6 +392,7 @@ class HybridRetriever:
         k1: float = 1.5,
         b: float = 0.75,
         avgdl: float = 100.0,
+        token_cache: dict[int, list[str]] | None = None,
     ) -> float:
         """Compute BM25 Okapi score for a single record given pre-computed IDF.
 
@@ -393,19 +400,18 @@ class HybridRetriever:
         """
         if not query_tokens:
             return 0.0
-        text = record.get("text", "")
-        metadata = record.get("metadata", {})
-        haystack = " ".join(
-            filter(None, [text, metadata.get("source_path", ""),
-                          metadata.get("file_name", ""),
-                          " ".join(metadata.get("tags", []))])
-        )
-        tokens = tokenize(haystack)
+
+        # Reuse pre-tokenized tokens when available (from BM25 pre-tokenization or IDF build)
+        tokens = None
+        if token_cache is not None:
+            tokens = token_cache.get(id(record))
+        if tokens is None:
+            tokens = tokenize(self._record_haystack(record))
+
         if not tokens:
             return 0.0
 
         dl = len(tokens)
-
         tf: dict[str, int] = {}
         for token in tokens:
             tf[token] = tf.get(token, 0) + 1
@@ -419,6 +425,20 @@ class HybridRetriever:
             tf_norm = (token_tf * (k1 + 1)) / (token_tf + k1 * (1 - b + b * dl / avgdl))
             score += token_idf * tf_norm
         return score
+
+    @staticmethod
+    def _record_haystack(record: dict[str, Any]) -> str:
+        """Build the haystack string for a record (text + metadata fields)."""
+        text = record.get("text", "")
+        metadata = record.get("metadata", {})
+        return " ".join(
+            filter(None, [
+                text,
+                metadata.get("source_path", ""),
+                metadata.get("file_name", ""),
+                " ".join(metadata.get("tags", [])),
+            ])
+        )
 
     def _needs_history_context(self, query: str) -> bool:
         compact = query.strip()
@@ -441,6 +461,6 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
     numerator = sum(x * y for x, y in zip(a, b))
     left = math.sqrt(sum(x * x for x in a))
     right = math.sqrt(sum(y * y for y in b))
-    if left == 0 or right == 0:
+    if left < 1e-12 or right < 1e-12:
         return 0.0
     return numerator / (left * right)

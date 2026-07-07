@@ -20,6 +20,7 @@ from app.generator import RAGGenerator
 from app.ingest import IngestionEngine
 from app.retriever import HybridRetriever
 from config import (
+    _load_env_file,
     ensure_directories,
     get_embedding_model,
     get_llm,
@@ -32,6 +33,11 @@ from config import (
 def init_session_state() -> None:
     if st.session_state.get("initialized"):
         return
+
+    # 从工作目录的 .env 文件加载环境变量（双重保障）
+    env_path = Path.cwd() / ".env"
+    if env_path.exists():
+        _load_env_file(env_path)
 
     settings = load_settings()
     validate_settings(settings)
@@ -85,7 +91,7 @@ def build_generator() -> RAGGenerator:
         llm = get_llm(settings)
     except Exception as exc:
         logger.warning("LLM not available: %s", exc)
-        st.warning(f"⚠️ DeepSeek LLM 未配置或初始化失败（{exc}），问答将使用 fallback 模式。请设置 DEEPSEEK_API_KEY。")
+        st.warning(f"⚠️ DeepSeek LLM 未配置或初始化失败（{exc}），问答将使用 fallback 模式。请在终端运行 `co-thinker init` 或编辑 .env 文件设置 DEEPSEEK_API_KEY。")
     generator = RAGGenerator(settings, llm=llm)
     st.session_state.generator = generator
     return generator
@@ -169,38 +175,11 @@ def render_sidebar(stats: dict[str, Any]) -> None:
             st.rerun()
 
     st.sidebar.markdown("---")
-    st.sidebar.caption("API Key 配置后会保存到 .env 文件，重启后仍有效")
-
-
-def _save_env_api_key(api_key: str) -> None:
-    """Persist the API key to .env so it survives restart."""
-    if not api_key:
-        return
-    env_path = Path(__file__).resolve().parent.parent / ".env"
-    if env_path.exists():
-        lines = env_path.read_text(encoding="utf-8").splitlines(keepends=True)
-    else:
-        lines = []
-    # Update or append DEEPSEEK_API_KEY
-    found = False
-    for i, line in enumerate(lines):
-        if line.strip().startswith("DEEPSEEK_API_KEY="):
-            lines[i] = f"DEEPSEEK_API_KEY={api_key}\n"
-            found = True
-            break
-    if not found:
-        lines.append(f"DEEPSEEK_API_KEY={api_key}\n")
-    env_path.write_text("".join(lines), encoding="utf-8")
+    st.sidebar.caption("API Key 通过终端 `co-thinker init` 或编辑 .env 文件配置")
 
 
 def render_settings(settings) -> None:
     with st.expander("运行时设置", expanded=False):
-        deepseek_key = st.text_input(
-            "DeepSeek API Key",
-            value=settings.deepseek_api_key,
-            type="password",
-            help="输入后点击「应用」自动保存到 .env，重启不丢失",
-        )
         top_k = st.slider("Top K", min_value=1, max_value=10, value=settings.top_k)
         similarity_cutoff = st.slider(
             "相似度阈值",
@@ -210,15 +189,12 @@ def render_settings(settings) -> None:
             step=0.05,
         )
         if st.button("应用运行时设置", use_container_width=True):
-            if deepseek_key:
-                _save_env_api_key(deepseek_key)
             st.session_state.runtime_overrides = {
-                "deepseek_api_key": deepseek_key,
                 "top_k": top_k,
                 "similarity_cutoff": similarity_cutoff,
             }
             reset_runtime_objects()
-            st.success("运行时设置已更新。API Key 已保存到 .env 文件，重启后自动加载。")
+            st.success("运行时设置已更新。")
 
 
 def render_docs_tab() -> None:

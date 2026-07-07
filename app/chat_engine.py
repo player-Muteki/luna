@@ -79,6 +79,7 @@ class ChatEngine:
         self.max_history_turns = max_history_turns
         self.current_id: str | None = None
         self.conversations: dict[str, Conversation] = {}
+        self._dirty = False
         self.load()
 
     @property
@@ -91,6 +92,7 @@ class ChatEngine:
         conversation = Conversation(title=title, metadata=metadata)
         self.conversations[conversation.conversation_id] = conversation
         self.current_id = conversation.conversation_id
+        self._mark_dirty()
         self.save()
         return conversation
 
@@ -98,6 +100,7 @@ class ChatEngine:
         if conversation_id not in self.conversations:
             return False
         self.current_id = conversation_id
+        self._mark_dirty()
         self.save()
         return True
 
@@ -109,6 +112,7 @@ class ChatEngine:
             self.create_conversation()
         elif self.current_id == conversation_id:
             self.current_id = next(iter(self.conversations))
+        self._mark_dirty()
         self.save()
         return True
 
@@ -118,6 +122,7 @@ class ChatEngine:
             return False
         conversation.title = title.strip() or conversation.title
         conversation.updated_at = utc_now_iso()
+        self._mark_dirty()
         self.save()
         return True
 
@@ -140,11 +145,13 @@ class ChatEngine:
 
     def add_user_message(self, content: str, **metadata) -> Message:
         message = self.current_conversation.add_message("user", content, **metadata)
+        self._mark_dirty()
         self.save()
         return message
 
     def add_assistant_message(self, content: str, **metadata) -> Message:
         message = self.current_conversation.add_message("assistant", content, **metadata)
+        self._mark_dirty()
         self.save()
         return message
 
@@ -161,6 +168,7 @@ class ChatEngine:
         conversation.messages = []
         conversation.title = "新对话"
         conversation.updated_at = utc_now_iso()
+        self._mark_dirty()
         self.save()
 
     def load(self) -> None:
@@ -194,7 +202,13 @@ class ChatEngine:
             self.current_id = next(iter(self.conversations))
             self.save()
 
+    def _mark_dirty(self) -> None:
+        self._dirty = True
+
     def save(self) -> None:
+        if not self._dirty:
+            return
+        self._dirty = False
         self.storage_path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
             "version": 1,
