@@ -180,14 +180,20 @@ class RAGGenerator:
         query: str,
         retrieval_results: RetrievalResults,
         chat_history: list[dict[str, Any]] | None = None,
-    ) -> Iterable[dict[str, str]]:
+    ) -> Iterable[tuple[str, str]]:
+        """流式生成回答，每个事件为 (event_type, content) 元组。
+
+        event_type:
+          - "content" — 答案文本片段
+          - "reasoning" — 推理过程文本片段
+        """
         if not retrieval_results.results:
-            yield {"type": "content", "content": NO_RESULT_MESSAGE}
+            yield ("content", NO_RESULT_MESSAGE)
             return
 
         if self.llm is None:
             result = self.generate(query, retrieval_results, chat_history)
-            yield {"type": "content", "content": result.answer}
+            yield ("content", result.answer)
             return
 
         try:
@@ -209,11 +215,11 @@ class RAGGenerator:
                     continue
                 reasoning = getattr(delta, "reasoning_content", None)
                 if reasoning:
-                    yield {"type": "reasoning", "content": reasoning}
+                    yield ("reasoning", reasoning)
                 if delta.content:
-                    yield {"type": "content", "content": delta.content}
+                    yield ("content", delta.content)
         except Exception as exc:
-            yield {"type": "content", "content": self.friendly_error_message(exc)}
+            yield ("content", self.friendly_error_message(exc))
 
     def build_messages(
         self,
