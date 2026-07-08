@@ -48,7 +48,7 @@ curl -sSL -o /tmp/co-thinker-install.sh 'https://raw.githubusercontent.com/playe
 
 **方案一（通过 GitHub API 获取脚本）：**
 ```bash
-curl -sSL https://api.github.com/repos/player-Muteki/co-thinker/contents/install.sh | python3 -c "import json,sys; print(json.load(sys.stdin)['content'])" | base64 -d > /tmp/co-thinker-install.sh && bash /tmp/co-thinker-install.sh
+curl -sSL -H "Accept: application/vnd.github.raw+json" https://api.github.com/repos/player-Muteki/co-thinker/contents/install.sh > /tmp/co-thinker-install.sh && bash /tmp/co-thinker-install.sh
 ```
 
 **方案二（手动安装）：**
