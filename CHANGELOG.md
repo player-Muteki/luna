@@ -1,5 +1,25 @@
 # Changelog
 
+## [v0.0.10] - 2026-07-08
+
+### ♻️ Refactor
+- 移除 Streamlit 旧版前端（`app/streamlit_app.py`），统一为 FastAPI + Next.js 架构
+- 业务逻辑从 `app/` 迁移至 `core/`（chat_engine, generator, parser 等）
+- 重构 `api/deps.py` 使用 `ProjectContext` 统一管理资源
+- 新增 `.co-thinker/` 项目配置系统（toml 格式），支持全局配置 `~/.co-thinkerc`
+
+### 🐛 Bug Fixes
+- 修复 `stream_generate` 返回 dict 但被当 tuple 解包，导致答案显示为重复 'content' 字符串的问题
+- 修复 `install.sh` 安装后未自动刷新 PATH 的问题（改为 exec /bin/zsh）
+
+### 🎨 UI
+- 文件管理：新增文件勾选/全选，支持按目录筛选
+- 会话管理：侧边栏显示消息数量、日期，支持删除
+- 删除旧的 SourcePanel 和 ws.ts（旧版 WebSocket 实现）
+- CSS 全局样式优化
+
+---
+
 ## [v0.0.7] - 2026-07-08
 
 ### ♻️ Maintenance
