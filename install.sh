@@ -94,15 +94,23 @@ info "Created link: $LINK -> $VENV_DIR/bin/co-thinker"
 
 # --- 4. Check PATH ---
 step "Checking PATH"
+SHELL_RC=""
 if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
     warn "$BIN_DIR is not in PATH!"
-    echo ""
-    echo "  Add the following to ~/.bashrc or ~/.zshrc:"
-    echo ""
-    echo "    export PATH=\"\$PATH:$BIN_DIR\""
-    echo ""
-    echo "  Then run: source ~/.zshrc"
-    echo ""
+    if [[ -f "$HOME/.zshrc" ]]; then
+        SHELL_RC="$HOME/.zshrc"
+    elif [[ -f "$HOME/.bashrc" ]]; then
+        SHELL_RC="$HOME/.bashrc"
+    elif [[ -f "$HOME/.bash_profile" ]]; then
+        SHELL_RC="$HOME/.bash_profile"
+    fi
+
+    if [[ -n "$SHELL_RC" ]]; then
+        echo "export PATH=\"\$PATH:$BIN_DIR\"" >> "$SHELL_RC"
+        info "已添加到 $SHELL_RC"
+    else
+        echo "  Run: export PATH=\"\$PATH:$BIN_DIR\""
+    fi
 else
     info "PATH already includes $BIN_DIR"
 fi
@@ -110,9 +118,12 @@ fi
 # --- Done ---
 step "Installation complete!"
 echo ""
-echo "  Create a working directory and start:"
+echo "  mkdir my-kb && cd my-kb"
+echo "  co-thinker init"
+echo "  co-thinker start"
 echo ""
-echo "    mkdir my-kb && cd my-kb"
-echo "    co-thinker init"
-echo "    co-thinker start"
-echo ""
+
+# 立即生效：重新加载终端配置
+if [[ -n "$SHELL_RC" ]]; then
+    exec "$SHELL" -l
+fi
