@@ -28,16 +28,18 @@ elif [[ $# -eq 0 ]]; then
     info "Repo: $REPO"
     API_URL="https://api.github.com/repos/$REPO/releases/latest"
     if command -v curl &>/dev/null; then
-        RELEASE_DATA=$(curl -s "$API_URL")
+        RELEASE_DATA=$(curl -s --max-time 10 "$API_URL")
     elif command -v wget &>/dev/null; then
-        RELEASE_DATA=$(wget -q -O- "$API_URL")
+        RELEASE_DATA=$(wget -q --timeout=10 -O- "$API_URL")
     else
         error "curl or wget required"
         exit 1
     fi
 
+    # 检查 API 是否返回了有效的 release 数据（被限流时返回的 JSON 不含 assets）
+    HAS_RELEASE=$(echo "$RELEASE_DATA" | grep -c '"tag_name"' || true)
     WHEEL_URL=$(echo "$RELEASE_DATA" | grep -oE 'https://[^"\\]+\.whl' | head -1)
-    if [[ -n "$WHEEL_URL" ]]; then
+    if [[ -n "$WHEEL_URL" && "$HAS_RELEASE" -gt 0 ]]; then
         WHEEL_NAME=$(basename "$WHEEL_URL")
         info "Downloading: $WHEEL_NAME"
         if command -v curl &>/dev/null; then
