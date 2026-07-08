@@ -3,7 +3,7 @@
 # Co-Thinker one-click install
 #
 # Usage:
-#   bash install.sh                    # auto-download from GitHub
+#   bash install.sh                    # install from GitHub source
 #   bash install.sh co_thinker-*.whl  # local .whl file
 # ============================================================
 set -euo pipefail
@@ -18,58 +18,32 @@ warn()  { echo -e "${YELLOW}==>${NC} $1"; }
 error() { echo -e "${RED}==>${NC} $1"; }
 step()  { echo -e "\n${BOLD}>> $1${NC}"; }
 
-# --- Download from GitHub ---
+# --- Determine install source ---
 REPO="player-Muteki/co-thinker"
 
 if [[ $# -ge 1 && -f "$1" ]]; then
+    # Local .whl file
     WHEEL_PATH="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
-elif [[ $# -eq 0 ]]; then
-    step "Fetching latest release from GitHub"
-    info "Repo: $REPO"
-    API_URL="https://api.github.com/repos/$REPO/releases/latest"
-    # 尝试从 GitHub API 获取 release（短超时，失败则走源码安装）
-    WHEEL_URL=""
-    if command -v curl &>/dev/null; then
-        RELEASE_DATA=$(curl -s --max-time 5 "$API_URL" 2>/dev/null || echo "")
-        HAS_RELEASE=$(echo "$RELEASE_DATA" | grep -c '"tag_name"' 2>/dev/null || echo "0")
-        if [[ "$HAS_RELEASE" -gt 0 ]]; then
-            WHEEL_URL=$(echo "$RELEASE_DATA" | grep -oE 'https://[^"\\]+\.whl' | head -1)
-        fi
-    fi
-
-    if [[ -n "$WHEEL_URL" ]]; then
-        WHEEL_NAME=$(basename "$WHEEL_URL")
-        info "Downloading: $WHEEL_NAME"
-        if command -v curl &>/dev/null; then
-            curl -sSL -o "/tmp/$WHEEL_NAME" "$WHEEL_URL"
-        else
-            wget -q -O "/tmp/$WHEEL_NAME" "$WHEEL_URL"
-        fi
-        WHEEL_PATH="/tmp/$WHEEL_NAME"
-        info "Download complete"
-    else
-        warn "No .whl release found, installing from source"
-        TMP_DIR=$(mktemp -d)
-        if command -v git &>/dev/null; then
-            git clone --depth 1 "https://github.com/$REPO.git" "$TMP_DIR" --quiet
-        else
-            ZIP_URL="https://github.com/$REPO/archive/refs/heads/main.zip"
-            if command -v curl &>/dev/null; then
-                curl -sSL -o "/tmp/co-thinker.zip" "$ZIP_URL"
-            else
-                wget -q -O "/tmp/co-thinker.zip" "$ZIP_URL"
-            fi
-            unzip -q "/tmp/co-thinker.zip" -d "/tmp/"
-            TMP_DIR="/tmp/co-thinker-main"
-        fi
-        info "Source downloaded to $TMP_DIR"
-        WHEEL_PATH="$TMP_DIR"
-    fi
 else
-    echo "Usage:"
-    echo "  bash install.sh                        # auto-download"
-    echo "  bash install.sh co_thinker-*.whl       # local install"
-    exit 1
+    step "Downloading Co-Thinker from GitHub"
+    TMP_DIR=$(mktemp -d)
+    if command -v git &>/dev/null; then
+        info "Cloning repo..."
+        git clone --depth 1 "https://github.com/$REPO.git" "$TMP_DIR" --quiet
+        info "Source cloned to $TMP_DIR"
+    else
+        info "Downloading zip..."
+        ZIP_URL="https://github.com/$REPO/archive/refs/heads/main.zip"
+        if command -v curl &>/dev/null; then
+            curl -sSL --max-time 30 -o "/tmp/co-thinker.zip" "$ZIP_URL"
+        else
+            wget -q --timeout=30 -O "/tmp/co-thinker.zip" "$ZIP_URL"
+        fi
+        unzip -q "/tmp/co-thinker.zip" -d "/tmp/"
+        TMP_DIR="/tmp/co-thinker-main"
+        info "Source extracted to $TMP_DIR"
+    fi
+    WHEEL_PATH="$TMP_DIR"
 fi
 
 # --- 1. Check Python ---
