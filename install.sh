@@ -34,10 +34,8 @@ else
 
     # Use GitHub API to find the latest release wheel URL
     if command -v curl &>/dev/null; then
-        # Fetch latest release data via API (lightweight, no auth needed)
         API_OUT=$(curl -sSL --max-time 15 "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null || true)
         if [[ -n "$API_OUT" ]]; then
-            # Extract the .whl asset download URL and tag name using grep/sed (no python dependency)
             WHEEL_URL=$(echo "$API_OUT" | grep -o '"browser_download_url": *"[^"]*\.whl"' | head -1 | sed 's/.*: *"//;s/"//' || true)
             TAG_NAME=$(echo "$API_OUT" | grep -o '"tag_name": *"[^"]*"' | head -1 | sed 's/.*: *"//;s/"//' || true)
             if [[ -n "$WHEEL_URL" ]]; then
