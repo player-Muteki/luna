@@ -23,8 +23,10 @@
 一条命令安装 Co-Thinker：
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/player-Muteki/co-thinker/main/install.sh | bash
+curl -sSL -o /tmp/co-thinker-install.sh https://raw.githubusercontent.com/player-Muteki/co-thinker/main/install.sh && bash /tmp/co-thinker-install.sh
 ```
+
+> 先下载到临时文件再执行，避免 GitHub raw 偶尔返回非脚本内容导致错误。
 
 ### Windows
 
@@ -36,10 +38,10 @@ curl -sSL https://raw.githubusercontent.com/player-Muteki/co-thinker/main/instal
 powershell -ExecutionPolicy Bypass -c "curl.exe -sSL -o $env:TEMP\install.ps1 https://raw.githubusercontent.com/player-Muteki/co-thinker/main/install.ps1; iex (Get-Content $env:TEMP\install.ps1 -Raw)"
 ```
 
-**方式二（使用 irm）：**
+**方式二（使用 irm - 先下载再执行）：**
 
 ```powershell
-powershell -ExecutionPolicy Bypass -c "iex ((irm https://raw.githubusercontent.com/player-Muteki/co-thinker/main/install.ps1).TrimStart([char]0xFEFF))"
+powershell -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/player-Muteki/co-thinker/main/install.ps1 -OutFile $env:TEMP\co-thinker-install.ps1; iex (Get-Content $env:TEMP\co-thinker-install.ps1 -Raw)"
 ```
 
 或手动下载后执行：
