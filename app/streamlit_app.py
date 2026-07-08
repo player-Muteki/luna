@@ -119,205 +119,197 @@ def unique_target_path(path: Path) -> Path:
         counter += 1
 
 
-def render_sidebar(stats: dict[str, Any]) -> None:
+def render_right_column() -> None:
+    """Render the right column: session management."""
     chat_engine = st.session_state.chat_engine
-    st.sidebar.title("Co-Thinker")
-    st.sidebar.caption("本地 RAG MVP")
-    st.sidebar.metric("文档数", stats["indexed_document_count"])
-    st.sidebar.metric("Chunks", stats["chunk_count"])
-    st.sidebar.metric("失败文档", stats["failed_document_count"])
-    st.sidebar.selectbox(
-        "检索模式",
-        options=["hybrid", "vector", "bm25"],
-        key="retrieval_mode",
-    )
-    st.sidebar.markdown("---")
-    st.sidebar.caption("会话")
-    if st.sidebar.button("新建会话", use_container_width=True):
+
+    st.markdown("### 💬 会话")
+
+    if st.button("➕ 新建会话", use_container_width=True, type="primary"):
         chat_engine.create_conversation()
         st.rerun()
 
     conversations = chat_engine.list_conversations()
     if conversations:
         labels = [item["title"] for item in conversations]
-        current_index = next((i for i, item in enumerate(conversations) if item["is_current"]), 0)
-        selected = st.sidebar.selectbox("当前会话", options=range(len(conversations)), index=current_index, format_func=lambda i: labels[i])
+        current_index = next(
+            (i for i, item in enumerate(conversations) if item["is_current"]), 0
+        )
+        selected = st.selectbox(
+            "切换会话",
+            options=range(len(conversations)),
+            index=current_index,
+            format_func=lambda i: labels[i],
+            label_visibility="collapsed",
+        )
         selected_id = conversations[selected]["id"]
         if selected_id != chat_engine.current_id:
             chat_engine.switch_conversation(selected_id)
             st.rerun()
 
-    sidebar_cols = st.sidebar.columns(2)
-    if sidebar_cols[0].button("清空当前", use_container_width=True, type="secondary"):
+    col1, col2 = st.columns(2)
+    if col1.button("🗑️ 清空", use_container_width=True, help="清空当前会话消息"):
         st.session_state.confirm_clear = True
+    if col2.button("❌ 删除", use_container_width=True, help="删除当前会话"):
+        st.session_state.confirm_delete = True
+
     if st.session_state.get("confirm_clear"):
-        st.sidebar.warning("确定清空当前会话消息？")
-        confirm_cols = st.sidebar.columns(2)
-        if confirm_cols[0].button("确认清空", use_container_width=True, type="primary"):
+        st.warning("确定清空当前会话消息？")
+        c1, c2 = st.columns(2)
+        if c1.button("确认清空", use_container_width=True, type="primary"):
             chat_engine.clear_history()
             st.session_state.confirm_clear = False
             st.rerun()
-        if confirm_cols[1].button("取消", use_container_width=True):
+        if c2.button("取消", use_container_width=True):
             st.session_state.confirm_clear = False
             st.rerun()
 
-    if sidebar_cols[1].button("删除当前", use_container_width=True, type="secondary"):
-        st.session_state.confirm_delete = True
     if st.session_state.get("confirm_delete"):
-        st.sidebar.warning("确定删除当前会话？此操作不可恢复。")
-        confirm_cols = st.sidebar.columns(2)
-        if confirm_cols[0].button("确认删除", use_container_width=True, type="primary"):
+        st.warning("确定删除当前会话？此操作不可恢复。")
+        c1, c2 = st.columns(2)
+        if c1.button("确认删除", use_container_width=True, type="primary"):
             chat_engine.delete_conversation(chat_engine.current_id)
             st.session_state.confirm_delete = False
             st.rerun()
-        if confirm_cols[1].button("取消", use_container_width=True):
+        if c2.button("取消", use_container_width=True):
             st.session_state.confirm_delete = False
             st.rerun()
 
-    st.sidebar.markdown("---")
-    st.sidebar.caption("API Key 通过终端 `co-thinker init` 或编辑 .env 文件配置")
 
-
-def render_settings(settings) -> None:
-    with st.expander("运行时设置", expanded=False):
-        top_k = st.slider("Top K", min_value=1, max_value=10, value=settings.top_k)
-        similarity_cutoff = st.slider(
-            "相似度阈值",
-            min_value=0.0,
-            max_value=1.0,
-            value=float(settings.similarity_cutoff),
-            step=0.05,
-        )
-        if st.button("应用运行时设置", use_container_width=True):
-            st.session_state.runtime_overrides = {
-                "top_k": top_k,
-                "similarity_cutoff": similarity_cutoff,
-            }
-            reset_runtime_objects()
-            st.success("运行时设置已更新。")
-
-
-def render_docs_tab() -> None:
+def render_left_column() -> None:
+    """Render the left column: settings → document import → retrieval mode → file list."""
     settings = current_settings()
     engine = st.session_state.ingest_engine
 
-    # ── 统计概览区 ──
-    stats = engine.get_index_stats()
-    overview_cols = st.columns(5)
-    overview_cols[0].metric("文档总数", stats["document_count"])
-    overview_cols[1].metric("已索引", stats["indexed_document_count"])
-    overview_cols[2].metric("失败", stats["failed_document_count"])
-    overview_cols[3].metric("分块数", stats["chunk_count"])
-    overview_cols[4].metric("最后更新", stats["last_updated_at"][:10] if stats.get("last_updated_at") else "-")
+    # ── 参数设置（用户友好版） ──
+    st.markdown("### ⚙️ 检索设置")
+    ref_count = st.slider(
+        "参考片段数",
+        min_value=1, max_value=10, value=settings.top_k,
+        help="每次问答时，从知识库中取出多少个相关片段作为参考依据",
+    )
+    match_level = st.slider(
+        "匹配相关度",
+        min_value=0.0, max_value=1.0,
+        value=float(settings.similarity_cutoff), step=0.05,
+        help="数值越高要求越严格，结果更少但更精准；数值越低会带来更多结果但可能包含不相关内容",
+    )
+    if st.button("✅ 应用检索设置", use_container_width=True):
+        st.session_state.runtime_overrides = {
+            "top_k": ref_count,
+            "similarity_cutoff": match_level,
+        }
+        reset_runtime_objects()
+        st.success("检索设置已更新。")
 
     st.divider()
 
-    # ── 文档导入区 ──
-    with st.container(border=True):
-        st.markdown("**文档导入**")
-        uploaded_files = st.file_uploader(
-            "上传知识库文档",
-            type=[
-                "md", "mdx", "txt", "py", "js", "jsx", "ts", "tsx",
-                "java", "go", "rs", "c", "cpp", "h", "cs", "php", "rb",
-                "json", "yaml", "yml", "toml", "xml", "csv", "sql", "log",
-                "pdf", "docx", "pptx",
-            ],
-            accept_multiple_files=True,
-        )
-        st.caption(
-            "支持格式：代码 / 文档 / 数据 "
-            "(.md .txt .py .js .jsx .ts .tsx .java .go .rs .c .cpp .h .cs .php .rb "
-            ".json .yaml .yml .toml .xml .csv .sql .log) "
-            "及办公文档 (.pdf .docx .pptx)"
-        )
-        tags_raw = st.text_input("标签（逗号分隔，可选）", placeholder="例如：docs, guide, report")
-        tags = [item.strip() for item in tags_raw.split(",") if item.strip()]
+    # ── 文档导入 ──
+    st.markdown("### 📄 文档导入")
+    uploaded_files = st.file_uploader(
+        "选择文件上传",
+        type=[
+            "md", "mdx", "txt", "py", "js", "jsx", "ts", "tsx",
+            "java", "go", "rs", "c", "cpp", "h", "cs", "php", "rb",
+            "json", "yaml", "yml", "toml", "xml", "csv", "sql", "log",
+            "pdf", "docx", "pptx",
+        ],
+        accept_multiple_files=True,
+        label_visibility="collapsed",
+    )
+    tags_raw = st.text_input("标签（逗号分隔，可选）", placeholder="例如：docs, guide, report")
+    tags = [item.strip() for item in tags_raw.split(",") if item.strip()]
 
-        import_cols = st.columns([1, 1, 2])
-        if import_cols[0].button("导入上传文件", use_container_width=True, type="primary"):
-            if not uploaded_files:
-                st.warning("请先选择至少一个文件。")
-            else:
-                with st.spinner("正在保存并导入文档..."):
-                    saved_paths = save_uploaded_files(uploaded_files, settings.data_dir)
-                    summary = engine.add_files(saved_paths, tags=tags)
-                    st.session_state.last_ingest_summary = summary
-                    st.session_state.retriever = build_retriever()
-                st.success(f"导入完成：已索引 {summary.indexed_files}，跳过 {summary.skipped_files}，失败 {summary.failed_files}")
-
-        if import_cols[1].button("扫描 data/ 并增量重建", use_container_width=True):
-            with st.spinner("正在重建索引..."):
-                summary = engine.rebuild_index(force=False)
+    import_cols = st.columns(2)
+    if import_cols[0].button("📥 导入", use_container_width=True, type="primary"):
+        if not uploaded_files:
+            st.warning("请先选择至少一个文件。")
+        else:
+            with st.spinner("正在保存并导入文档..."):
+                saved_paths = save_uploaded_files(uploaded_files, settings.data_dir)
+                summary = engine.add_files(saved_paths, tags=tags)
                 st.session_state.last_ingest_summary = summary
                 st.session_state.retriever = build_retriever()
-            st.success(f"重建完成：已索引 {summary.indexed_files}，跳过 {summary.skipped_files}，失败 {summary.failed_files}")
+            st.success(f"导入完成：已索引 {summary.indexed_files}，跳过 {summary.skipped_files}，失败 {summary.failed_files}")
 
-        summary = st.session_state.get("last_ingest_summary")
-        if summary is not None:
-            with st.expander("最近一次导入结果", expanded=True):
-                res_cols = st.columns(4)
-                res_cols[0].metric("文件总数", summary.total_files)
-                res_cols[1].metric("已索引", summary.indexed_files)
-                res_cols[2].metric("跳过", summary.skipped_files)
-                res_cols[3].metric("失败", summary.failed_files)
-                if summary.results:
-                    st.dataframe(
-                        [
-                            {
-                                "文件": item.path,
-                                "状态": item.status,
-                                "分块数": item.chunk_count,
-                                "错误": item.error or "",
-                            }
-                            for item in summary.results
-                        ],
-                        use_container_width=True,
-                        hide_index=True,
-                    )
+    if import_cols[1].button("🔄 增量重建", use_container_width=True):
+        with st.spinner("正在重建索引..."):
+            summary = engine.rebuild_index(force=False)
+            st.session_state.last_ingest_summary = summary
+            st.session_state.retriever = build_retriever()
+        st.success(f"重建完成：已索引 {summary.indexed_files}，跳过 {summary.skipped_files}，失败 {summary.failed_files}")
+
+    summary = st.session_state.get("last_ingest_summary")
+    if summary is not None:
+        with st.expander("最近一次导入结果", expanded=False):
+            res_cols = st.columns(4)
+            res_cols[0].metric("总数", summary.total_files)
+            res_cols[1].metric("已索引", summary.indexed_files)
+            res_cols[2].metric("跳过", summary.skipped_files)
+            res_cols[3].metric("失败", summary.failed_files)
+            if summary.results:
+                st.dataframe(
+                    [
+                        {
+                            "文件": item.path,
+                            "状态": item.status,
+                            "分块数": item.chunk_count,
+                            "错误": item.error or "",
+                        }
+                        for item in summary.results
+                    ],
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+    # ── 检索模式 ──
+    st.divider()
+    st.markdown("### 🔍 检索模式")
+    st.selectbox(
+        "检索方式",
+        options=["hybrid", "vector", "bm25"],
+        key="retrieval_mode",
+        label_visibility="collapsed",
+        help="hybrid：混合检索（推荐）；vector：仅向量检索；bm25：仅关键词检索",
+    )
+    st.caption("hybrid 为混合检索（推荐），vector 仅向量，bm25 仅关键词")
 
     st.divider()
 
     # ── 文档管理区 ──
+    st.markdown("### 📂 文件列表")
     documents = engine.list_documents()
     if not documents:
-        st.info("当前知识库为空，请通过上方导入区域添加文档。")
+        st.info("知识库为空，请通过上方导入区添加文档。")
         return
 
-    filter_cols = st.columns([2, 1, 1, 1, 1])
-    with filter_cols[0]:
-        search_query = st.text_input("搜索文件名", placeholder="关键词...", label_visibility="collapsed")
-    with filter_cols[1]:
-        status_options = ["全部", "indexed", "failed"]
-        status_filter = st.selectbox("状态", status_options, label_visibility="collapsed")
-    with filter_cols[2]:
-        all_exts = sorted({doc.get("file_ext", "") for doc in documents})
-        type_filter = st.selectbox("类型", ["全部"] + all_exts, label_visibility="collapsed")
-    with filter_cols[3]:
-        all_tags = sorted({tag for doc in documents for tag in doc.get("tags", [])})
-        tag_filter = st.selectbox("标签", ["全部"] + all_tags, label_visibility="collapsed")
-    with filter_cols[4]:
-        show_batch = st.toggle("批量操作", value=st.session_state.get("show_batch_ops", False))
-        st.session_state.show_batch_ops = show_batch
+    search_q = st.text_input("搜索文件名", placeholder="关键词...", label_visibility="collapsed")
+    status_filter = st.selectbox(
+        "状态过滤", ["全部", "indexed", "failed"], label_visibility="collapsed"
+    )
+    all_tags = sorted({tag for doc in documents for tag in doc.get("tags", [])})
+    tag_filter = st.selectbox("标签过滤", ["全部"] + all_tags, label_visibility="collapsed")
 
     filtered = documents[:]
-    if search_query:
-        q = search_query.lower()
+    if search_q:
+        q = search_q.lower()
         filtered = [
             d for d in filtered
             if q in d.get("file_name", "").lower() or q in d.get("source_path", "").lower()
         ]
     if status_filter != "全部":
         filtered = [d for d in filtered if d.get("status") == status_filter]
-    if type_filter != "全部":
-        filtered = [d for d in filtered if d.get("file_ext") == type_filter]
     if tag_filter != "全部":
         filtered = [d for d in filtered if tag_filter in d.get("tags", [])]
+
+    # Batch ops toggle
+    show_batch = st.toggle("批量操作", value=st.session_state.get("show_batch_ops", False))
+    st.session_state.show_batch_ops = show_batch
 
     if st.session_state.get("show_batch_ops") and filtered:
         with st.container(border=True):
             st.markdown(f"已筛选 **{len(filtered)}** 个文档")
-            batch_cols = st.columns([1, 1, 4])
+            batch_cols = st.columns(2)
             if batch_cols[0].button("批量删除", type="secondary", use_container_width=True):
                 for doc in filtered:
                     try:
@@ -337,64 +329,43 @@ def render_docs_tab() -> None:
         st.info("没有匹配的文档。")
         return
 
-    header_cols = st.columns([3, 1, 1.5, 1, 1, 1, 2.5])
-    header_cols[0].markdown("**文件名**")
-    header_cols[1].markdown("**类型**")
-    header_cols[2].markdown("**标签**")
-    header_cols[3].markdown("**分块数**")
-    header_cols[4].markdown("**状态**")
-    header_cols[5].markdown("**更新**")
-    header_cols[6].markdown("**操作**")
-
     for doc in filtered:
-        cols = st.columns([3, 1, 1.5, 1, 1, 1, 2.5])
-        with cols[0]:
-            st.markdown(doc.get("file_name", "?"))
-        with cols[1]:
-            st.write(doc.get("file_ext", ""))
-        with cols[2]:
-            tags = doc.get("tags", [])
-            st.write(", ".join(tags) if tags else "-")
-        with cols[3]:
-            st.write(str(doc.get("chunk_count", 0)))
-        with cols[4]:
+        doc_id = doc["document_id"]
+        with st.container(border=True):
+            doc_cols = st.columns([3, 1])
+            doc_cols[0].markdown(f"**{doc.get('file_name', '?')}**")
             status = doc.get("status", "")
             if status == "indexed":
-                st.markdown(":green[已索引]")
+                doc_cols[1].markdown(":green[已索引]")
             elif status == "failed":
-                st.markdown(":red[失败]")
+                doc_cols[1].markdown(":red[失败]")
             else:
-                st.write(status)
-        with cols[5]:
-            updated = doc.get("updated_at", "")
-            st.caption(updated[:10] if updated else "-")
-        with cols[6]:
+                doc_cols[1].write(status)
+            st.caption(
+                f"{doc.get('file_ext', '')} · {doc.get('chunk_count', 0)} 分块"
+                + (f" · {', '.join(doc.get('tags', []))}" if doc.get("tags") else "")
+            )
             act_cols = st.columns(4)
-            if act_cols[0].button("分块", key=f"view_{doc['document_id']}", help="查看分块"):
-                st.session_state.view_chunks_doc_id = doc["document_id"]
-            if act_cols[1].button("标签", key=f"tag_{doc['document_id']}", help="编辑标签"):
-                st.session_state.edit_tags_doc_id = doc["document_id"]
-            if act_cols[2].button("重建", key=f"reindex_{doc['document_id']}", help="重新索引"):
+            if act_cols[0].button("🔍 分块", key=f"view_{doc_id}", help="查看分块"):
+                st.session_state.view_chunks_doc_id = doc_id
+            if act_cols[1].button("🏷️ 标签", key=f"tag_{doc_id}", help="编辑标签"):
+                st.session_state.edit_tags_doc_id = doc_id
+            if act_cols[2].button("🔄 重建", key=f"reindex_{doc_id}", help="重新索引"):
                 try:
-                    engine.delete_file(doc["document_id"])
+                    engine.delete_file(doc_id)
                     summary = engine.add_files([doc["source_path"]], tags=doc.get("tags"))
                     st.session_state.last_ingest_summary = summary
                     st.session_state.retriever = build_retriever()
                     st.rerun()
                 except Exception as e:
                     st.error(str(e))
-            if act_cols[3].button("删除", key=f"del_{doc['document_id']}", help="删除文档"):
-                st.session_state.confirm_delete_doc_id = doc["document_id"]
-        st.divider()
-
-    # ── 删除确认 ──
-    if st.session_state.get("confirm_delete_doc_id"):
-        doc_id = st.session_state.confirm_delete_doc_id
-        doc_record = next((d for d in documents if d["document_id"] == doc_id), None)
-        if doc_record:
-            st.warning(f"确定删除文档「{doc_record.get('file_name', '')}」？此操作不可恢复。")
-            confirm_cols = st.columns([1, 1, 4])
-            if confirm_cols[0].button("确认删除", type="primary"):
+            if act_cols[3].button("🗑️", key=f"del_{doc_id}", help="删除文档"):
+                st.session_state.confirm_delete_doc_id = doc_id
+        # ── 删除确认 ──
+        if st.session_state.get("confirm_delete_doc_id") == doc_id:
+            st.warning(f"确定删除「{doc.get('file_name', '')}」？此操作不可恢复。")
+            c1, c2 = st.columns(2)
+            if c1.button("确认删除", key=f"cf_del_{doc_id}", type="primary"):
                 try:
                     engine.delete_file(doc_id)
                     st.session_state.retriever = build_retriever()
@@ -402,48 +373,30 @@ def render_docs_tab() -> None:
                     st.error(str(e))
                 st.session_state.confirm_delete_doc_id = None
                 st.rerun()
-            if confirm_cols[1].button("取消"):
+            if c2.button("取消", key=f"cancel_del_{doc_id}"):
                 st.session_state.confirm_delete_doc_id = None
                 st.rerun()
-
-    # ── 标签编辑 ──
-    if st.session_state.get("edit_tags_doc_id"):
-        doc_id = st.session_state.edit_tags_doc_id
-        doc_record = next((d for d in documents if d["document_id"] == doc_id), None)
-        if doc_record:
+        # ── 标签编辑 ──
+        if st.session_state.get("edit_tags_doc_id") == doc_id:
             with st.container(border=True):
-                st.markdown(f"**编辑标签：{doc_record.get('file_name', '')}**")
-                current_tags = list(doc_record.get("tags", []))
+                st.markdown(f"**编辑标签：{doc.get('file_name', '')}**")
+                current_tags = list(doc.get("tags", []))
                 st.markdown(f"当前标签：{', '.join(current_tags) if current_tags else '无'}")
-                new_tag = st.text_input("添加标签", key="edit_tag_input")
+                new_tag = st.text_input("添加标签", key=f"edit_tag_{doc_id}")
                 tag_act_cols = st.columns([1, 1, 3])
                 if tag_act_cols[0].button("添加", type="primary"):
                     if new_tag.strip() and new_tag.strip() not in current_tags:
                         current_tags.append(new_tag.strip())
-                        doc_record["tags"] = current_tags
-                        engine.manifest.upsert_document(doc_record)
+                        doc["tags"] = current_tags
+                        engine.manifest.upsert_document(doc)
                         st.rerun()
                 if tag_act_cols[1].button("关闭"):
                     st.session_state.edit_tags_doc_id = None
                     st.rerun()
-                if current_tags:
-                    st.markdown("**已有标签（点击删除）：**")
-                    tag_chips = st.columns(min(len(current_tags), 6))
-                    for i, tag in enumerate(current_tags):
-                        col_idx = i % 6
-                        with tag_chips[col_idx]:
-                            if st.button(f"x {tag}", key=f"del_tag_{tag}_{doc_id}"):
-                                doc_record["tags"] = [t for t in current_tags if t != tag]
-                                engine.manifest.upsert_document(doc_record)
-                                st.rerun()
-
-    # ── 查看分块 ──
-    if st.session_state.get("view_chunks_doc_id"):
-        doc_id = st.session_state.view_chunks_doc_id
-        doc_record = next((d for d in documents if d["document_id"] == doc_id), None)
-        if doc_record:
+        # ── 查看分块 ──
+        if st.session_state.get("view_chunks_doc_id") == doc_id:
             with st.container(border=True):
-                st.markdown(f"**分块列表：{doc_record.get('file_name', '')}**")
+                st.markdown(f"**分块列表：{doc.get('file_name', '')}**")
                 all_records = engine.vector_store.iter_records()
                 doc_chunks = [r for r in all_records if r.get("document_id") == doc_id]
                 if doc_chunks:
@@ -461,13 +414,12 @@ def render_docs_tab() -> None:
                     )
                 else:
                     st.info("该文档暂无分块记录。")
-                if st.button("关闭分块查看"):
+                if st.button("关闭", key=f"close_chunks_{doc_id}"):
                     st.session_state.view_chunks_doc_id = None
                     st.rerun()
 
 
 def render_chat_tab() -> None:
-    st.subheader("问答")
     engine = st.session_state.ingest_engine
     chat_engine = st.session_state.chat_engine
     stats = engine.get_index_stats()
@@ -582,25 +534,40 @@ def main() -> None:
     st.set_page_config(page_title="Co-Thinker", layout="wide")
     init_session_state()
 
-    settings = current_settings()
-    stats = st.session_state.ingest_engine.get_index_stats()
+    # Inject custom CSS for column stability
+    st.markdown(
+        """
+        <style>
+        /* Keep columns scrollable independently */
+        div[data-testid="column"] > div:first-child {
+            height: calc(100vh - 8rem);
+            overflow-y: auto;
+            padding-right: 0.75rem;
+        }
+        /* Hide scrollbar for cleaner look */
+        div[data-testid="column"] > div:first-child::-webkit-scrollbar {
+            display: none;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
-    st.title("Co-Thinker")
-    st.caption("本地知识库问答 MVP")
-    render_sidebar(stats)
-    render_settings(settings)
+    left_col, mid_col, right_col = st.columns([1.3, 2, 1])
 
-    overview_cols = st.columns(4)
-    overview_cols[0].metric("已索引文档", stats["indexed_document_count"])
-    overview_cols[1].metric("Chunks", stats["chunk_count"])
-    overview_cols[2].metric("失败文档", stats["failed_document_count"])
-    overview_cols[3].metric("最后更新", stats["last_updated_at"] or "-")
+    with left_col:
+        render_left_column()
 
-    docs_tab, chat_tab = st.tabs(["文档管理", "问答"])
-    with docs_tab:
-        render_docs_tab()
-    with chat_tab:
-        render_chat_tab()
+    with mid_col:
+        stats = st.session_state.ingest_engine.get_index_stats()
+        st.markdown("## 💡 问答")
+        if stats["chunk_count"] == 0:
+            st.info("知识库为空，请在左侧文档导入中添加文档。")
+        else:
+            render_chat_tab()
+
+    with right_col:
+        render_right_column()
 
 
 if __name__ == "__main__":
