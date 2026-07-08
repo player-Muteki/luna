@@ -8,11 +8,12 @@
 
 ## 功能模块
 
-- 知识库构建与管理（支持 md、txt、代码文件等格式批量导入、分类标注更新）
-- 精准语义检索（意图解析 + 关键信息提取）
-- RAG 答案生成（大模型 + 检索上下文，支持多轮对话连贯性）
-- 多轮对话上下文记录
-- 可视化交互界面
+- **知识库构建** — 支持 md、txt、代码、PDF、DOCX、PPTX 等多格式文档批量导入
+- **混合检索** — 向量检索 + BM25 混合排序（RRF 融合），精准定位相关信息
+- **RAG 答案生成** — 大模型 + 检索上下文，支持多轮对话连贯性
+- **多轮对话管理** — 会话持久化、历史上下文维护
+- **可视化交互界面** — FastAPI 后端 + Next.js 前端双栏/三栏布局
+- **CLI 工具链** — 一键初始化、启动、扫描、问答
 
 
 ## 安装
@@ -72,24 +73,27 @@ co-thinker start
 
 ```
 co-thinker/
-├── app/                    # 核心应用代码
-│   ├── streamlit_app.py    # Web 界面
+├── api/                    # FastAPI 后端服务
+│   ├── server.py           # 应用入口与路由注册
+│   ├── deps.py             # 依赖注入
+│   └── routes/             # API 路由（chat / files / ingest / sessions）
+├── core/                   # 核心业务逻辑
 │   ├── chat_engine.py      # 对话引擎
-│   ├── generator.py        # 答案生成
-│   ├── retriever.py        # 文档检索
-│   └── ingest.py           # 文档导入与索引
-├── cli.py                  # CLI 入口（启动 Web / 版本信息）
+│   ├── generator.py        # 答案生成（LLM 调用）
+│   ├── retriever.py        # 混合检索（向量 + BM25）
+│   ├── ingest.py           # 文档导入与索引
+│   ├── parser.py           # 文档解析（PDF/DOCX/PPTX/文本）
+│   └── project.py          # 项目上下文与配置管理
+├── web/                    # Next.js 前端
+│   ├── app/                # 页面路由
+│   ├── components/         # UI 组件
+│   └── lib/                # API 与 WebSocket 客户端
+├── cli.py                  # CLI 入口（init / start / run / scan）
 ├── __version__.py          # 版本号
-├── data/                   # 知识库源文档（markdown/txt）
-├── tests/                  # 测试
-├── config.py               # 配置管理
-├── requirements.txt        # 直接依赖声明
-├── requirements.lock       # 精确版本锁
-├── .python-version         # Python 版本锁定
-├── .env.example            # 环境变量模板
-├── setup.sh                # 一键环境设置（Linux/macOS）
-├── install.ps1             # 一键安装脚本（Windows PowerShell）
+├── pyproject.toml          # 项目元数据与依赖声明
+├── install.sh              # 一键安装脚本（Linux / macOS）
+├── install.ps1             # 一键安装脚本（Windows）
 └── README.md
 ```
 
-> `vectorstore/`（向量索引）和 `storage/`（运行时数据）由程序自动生成，不纳入版本控制。
+> 运行时数据（`.co-thinker/`）由程序自动生成，不纳入版本控制。
