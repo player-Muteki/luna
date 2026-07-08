@@ -32,7 +32,7 @@ curl -sSL https://raw.githubusercontent.com/player-Muteki/co-thinker/main/instal
 **方式一（推荐 - 使用 curl.exe）：**
 
 ```powershell
-powershell -ExecutionPolicy Bypass -c 'iex (((curl.exe -sSL https://raw.githubusercontent.com/player-Muteki/co-thinker/main/install.ps1) -replace [char]13, "") -join [char]10).TrimStart([char]0xFEFF)'
+powershell -ExecutionPolicy Bypass -c "$f='install.ps1'; curl.exe -sSL -o $env:TEMP\$f https://raw.githubusercontent.com/player-Muteki/co-thinker/main/install.ps1; iex (Get-Content $env:TEMP\$f -Raw)"
 ```
 
 **方式二（使用 irm）：**
