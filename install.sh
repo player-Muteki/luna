@@ -104,29 +104,14 @@ fi
 "$VENV_DIR/bin/pip" install "$WHEEL_PATH" --quiet
 info "Installed to $VENV_DIR"
 
-# --- 3. Build web frontend ---
-step "Building web frontend"
+# --- 3. Install frontend dependencies ---
+step "Installing web frontend dependencies"
 WEB_DIR=$("$VENV_DIR/bin/python" -c "import web, os; print(os.path.dirname(web.__file__))" 2>/dev/null || echo "")
 if [[ -n "$WEB_DIR" && -f "$WEB_DIR/package.json" ]]; then
-    if [[ -d "$WEB_DIR/.next" && -f "$WEB_DIR/.next/build-manifest.json" ]]; then
-        info "检测到预编译前端产物 (.next/)"
-        if command -v npm &>/dev/null; then
-            info "安装运行时依赖 (npm install --omit=dev)..."
-            (cd "$WEB_DIR" && npm install --omit=dev --quiet) 2>&1 && info "依赖安装完成" || warn "npm install 失败，首次 start 时会自动安装"
-        else
-            warn "npm 未安装，首次 co-thinker start 时需要 npm"
-            warn "推荐安装 Node.js (https://nodejs.org/)"
-        fi
-    elif command -v npm &>/dev/null; then
+    if command -v npm &>/dev/null; then
         info "安装前端依赖 (npm install)..."
         if (cd "$WEB_DIR" && npm install --quiet) 2>&1; then
             info "前端依赖安装完成"
-            info "构建生产包 (npm run build)..."
-            if (cd "$WEB_DIR" && npm run build) 2>&1; then
-                info "前端构建成功"
-            else
-                warn "npm run build 失败，首次 co-thinker start 时会自动构建"
-            fi
         else
             warn "npm install 失败，首次 co-thinker start 时会自动安装"
         fi

@@ -72,11 +72,6 @@ web = [
     "tailwind.config.ts",
     "postcss.config.js",
     "globals.css",
-    ".next/build-manifest.json",
-    ".next/server/**/*.js",
-    ".next/server/**/*.json",
-    ".next/static/**/*",
-    ".next/routes-manifest.json",
 ]
 
 

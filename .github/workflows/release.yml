@@ -49,29 +49,13 @@ jobs:
           fi
           echo "✅ 版本一致: $TAG_VERSION"
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Build web frontend
-        run: |
-          cd web
-          npm install --quiet
-          npm run build
-          cd ..
-          # 移除 .next 排除规则，使其包含在 wheel 中
-          sed -i '/prune web\/.next/d' MANIFEST.in
-
       - name: Install build tools
         run: |
           python -m pip install --upgrade pip build
 
       - name: Build wheel
         run: |
-          python -m build --wheel --outdir dist/          
-          # 恢复 MANIFEST.in（仅用于 git 工作树干净）
-          git checkout MANIFEST.in
+          python -m build --wheel --outdir dist/
 
       - name: Verify wheel
         run: |
