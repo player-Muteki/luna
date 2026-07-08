@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.parser import (
+from core.parser import (
     DocxParser,
     PDFParser,
     PARSER_REGISTRY,

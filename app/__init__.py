@@ -1,17 +1,16 @@
-"""Application package for Co-Thinker — a RAG-based Q&A system."""
+"""向后兼容层 — 核心模块已迁移至 core/。"""
+from __future__ import annotations
 
-from app.chat_engine import ChatEngine, Conversation, Message
-from app.generator import GenerationResult, RAGGenerator, SourceReference
-from app.ingest import (
+from core.chat_engine import ChatEngine, Conversation, Message
+from core.generator import GenerationResult, RAGGenerator, SourceReference
+from core.ingest import (
     ChunkRecord,
-    DocumentManifest,
     FileIngestResult,
     IngestionEngine,
     IngestSummary,
-    JsonVectorStore,
     VectorStore,
 )
-from app.parser import (
+from core.parser import (
     DocxParser,
     DocumentParser,
     PARSER_REGISTRY,
@@ -20,18 +19,16 @@ from app.parser import (
     TEXT_EXTENSIONS,
     TextParser,
 )
-from app.retriever import (
+from core.retriever import (
     HybridRetriever,
     RetrievalResult,
     RetrievalResults,
 )
-from config import Settings
 
 __all__ = [
     "ChatEngine",
     "ChunkRecord",
     "Conversation",
-    "DocumentManifest",
     "DocumentParser",
     "DocxParser",
     "FileIngestResult",
@@ -39,7 +36,6 @@ __all__ = [
     "HybridRetriever",
     "IngestionEngine",
     "IngestSummary",
-    "JsonVectorStore",
     "Message",
     "PARSER_REGISTRY",
     "PDFParser",
@@ -47,7 +43,6 @@ __all__ = [
     "RAGGenerator",
     "RetrievalResult",
     "RetrievalResults",
-    "Settings",
     "SourceReference",
     "TEXT_EXTENSIONS",
     "TextParser",

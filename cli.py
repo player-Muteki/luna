@@ -51,66 +51,24 @@ def _banner(version: str) -> str:
 def _setup_project_context() -> object:
     """Create and wire up a ProjectContext with all engines."""
     from core.project import ProjectContext, get_api_key, get_llm, get_embedding_model
-    from core.ingest import IngestionEngine, JsonVectorStore, DocumentManifest
-    from core.retriever import HybridRetriever
-    from core.generator import RAGGenerator
-    from core.chat_engine import ChatEngine
 
     ctx = ProjectContext.load()
-    ctx._ensure_co_dir()
 
     # API key
+    api_key = ""
     try:
         api_key = get_api_key(ctx)
     except Exception:
-        api_key = ""
+        pass
 
-    llm = None
     if api_key:
         try:
-            llm = get_llm(ctx)
-            ctx.llm = llm
+            ctx.llm = get_llm(ctx)
         except Exception:
             pass
 
-    embedding_model = get_embedding_model(ctx)
-    ctx.embedding_model = embedding_model
-
-    # Vector store
-    vectorstore = JsonVectorStore(ctx.chunks_path)
-    ctx.vectorstore = vectorstore
-
-    # Manifest
-    manifest = DocumentManifest(ctx.manifest_path)
-    ctx.manifest = manifest
-
-    # Ingest engine
-    ingest = IngestionEngine(
-        config=ctx.config,
-        root=ctx.root,
-        embedding_model=embedding_model,
-        vector_store=vectorstore,
-    )
-    ctx.ingest_engine = ingest
-
-    # Retriever
-    retriever = HybridRetriever(
-        config=ctx.config,
-        vector_store=vectorstore,
-        embedding_model=embedding_model,
-    )
-    ctx.retriever = retriever
-
-    # Chat engine
-    chat_engine = ChatEngine(
-        storage_path=ctx.sessions_path,
-        max_history_turns=ctx.config.max_history_turns,
-    )
-    ctx.chat_engine = chat_engine
-
-    # Generator
-    generator = RAGGenerator(config=ctx.config, llm=llm)
-    ctx.generator = generator
+    ctx.embedding_model = get_embedding_model(ctx)
+    ctx.setup_engines()
 
     return ctx
 
@@ -380,12 +338,20 @@ def _start_full_stack(web_dir: Path, port: int, api_port: int, cwd: Path, open_b
             return
         typer.echo("[WEB] 前端依赖安装完成")
 
-    typer.echo(f"[WEB] 启动 Next.js (port {port})...")
+    # 检测生产构建产物，决定启动模式
+    next_build = web_dir / ".next"
+    if next_build.exists():
+        typer.echo(f"[WEB] 启动 Next.js 生产服务器 (port {port})...")
+        mode_cmd = ["npx", "next", "start", "--port", str(port)]
+    else:
+        typer.echo(f"[WEB] 启动 Next.js 开发服务器 (port {port})...")
+        mode_cmd = ["npx", "next", "dev", "--port", str(port)]
+
     env = os.environ.copy()
     env["NEXT_PUBLIC_API_URL"] = f"http://localhost:{api_port}"
 
     web_proc = subprocess.Popen(
-        ["npx", "next", "dev", "--port", str(port)],
+        mode_cmd,
         cwd=str(web_dir),
         env=env,
     )

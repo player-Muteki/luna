@@ -11,7 +11,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-from app.parser import DocumentParser, PARSER_REGISTRY
+from core.parser import DocumentParser, PARSER_REGISTRY
 from config import Settings, ensure_directories
 
 SUPPORTED_EXTENSIONS = {

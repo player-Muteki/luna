@@ -7,7 +7,7 @@ from typing import Any, Iterable
 
 logger = logging.getLogger(__name__)
 
-from app.retriever import RetrievalResults
+from core.retriever import RetrievalResults
 from config import Settings, validate_for_chat
 
 DEFAULT_RAG_SYSTEM_PROMPT = """你是 Co-Thinker，一个基于领域知识库的问答助手。

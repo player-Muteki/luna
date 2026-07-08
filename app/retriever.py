@@ -6,7 +6,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.ingest import VectorStore
+from core.ingest import VectorStore
 from config import Settings
 
 # Match English/alphanumeric tokens as words, Chinese characters individually.

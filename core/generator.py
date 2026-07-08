@@ -130,7 +130,6 @@ class RAGGenerator:
         self.config = config
         self.llm = llm
         self.prompt_template = prompt_template or DEFAULT_RAG_SYSTEM_PROMPT
-        self.prompt_template = prompt_template or DEFAULT_RAG_SYSTEM_PROMPT
 
     def generate(
         self,

@@ -75,7 +75,26 @@ step "Creating runtime directories"
 mkdir -p vectorstore storage
 info "vectorstore/ storage/ ready"
 
-# --- 5. Verify ---
+# --- 5. Install web frontend dependencies ---
+step "Installing web frontend dependencies"
+if [[ -d web ]]; then
+    if [[ ! -d web/node_modules ]]; then
+        if command -v npm &>/dev/null; then
+            info "Running npm install in web/ ..."
+            (cd web && npm install --quiet) && info "Web frontend dependencies installed" || \
+                warn "npm install 失败，可稍后运行 co-thinker start 自动安装"
+        else
+            warn "npm not found! Install Node.js first (https://nodejs.org/)"
+            warn "Or run 'co-thinker start' later — it will auto-install deps"
+        fi
+    else
+        info "web/node_modules/ already exists, skipping"
+    fi
+else
+    info "web/ directory not found, skipping frontend setup"
+fi
+
+# --- 6. Verify ---
 step "Verifying"
 python -c "
 from config import load_settings, validate_settings
@@ -88,6 +107,6 @@ print('  Config OK')
 step "Dev environment ready!"
 echo ""
 echo "  Activate:     source .venv/bin/activate"
-echo "  Start:        streamlit run app/streamlit_app.py"
+echo "  Start:        co-thinker start"
 echo "  Test:         pytest tests/ -v"
 echo "  Dependencies: pip list"

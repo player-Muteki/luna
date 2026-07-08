@@ -6,9 +6,10 @@
   --sidebar-bg: #18202b;
   --sidebar-fg: #f4f7fb;
   --sidebar-muted: #98a6b8;
-  --sidebar-active: #263241;
-  --sidebar-hover: #202b38;
-  --surface-bg: #f7f8fb;
+ --sidebar-active: #263241;
+ --sidebar-hover: #202b38;
+  --sidebar-divider: rgba(255, 255, 255, 0.1);
+ --surface-bg: #f7f8fb;
   --surface-panel: #ffffff;
   --surface-alt: #eef2f6;
   --surface-border: #d8dee8;
@@ -33,9 +34,10 @@
   --sidebar-bg: #111827;
   --sidebar-fg: #f8fafc;
   --sidebar-muted: #94a3b8;
-  --sidebar-active: #1f2937;
-  --sidebar-hover: #172033;
-  --surface-bg: #0f172a;
+ --sidebar-active: #1f2937;
+ --sidebar-hover: #172033;
+  --sidebar-divider: rgba(255, 255, 255, 0.08);
+ --surface-bg: #0f172a;
   --surface-panel: #111827;
   --surface-alt: #182235;
   --surface-border: #2a3547;

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useMemo } from "react";
 import { File, FileText, Folder, FolderOpen, CheckSquare, Square, ChevronRight, ChevronDown } from "lucide-react";
 
 interface FileItem {
@@ -40,7 +41,7 @@ function formatFileSize(size: number): string {
 export default function FileTree({ files, selected, onToggle }: FileTreeProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set(["", "root"]));
 
-  // Build tree structure
+  // Build tree structure — memoized to avoid O(n) rebuild per render
   interface TreeNode {
     name: string;
     path: string;
@@ -49,32 +50,36 @@ export default function FileTree({ files, selected, onToggle }: FileTreeProps) {
     file?: FileItem;
   }
 
-  const root: TreeNode = { name: "", path: "", is_dir: true, children: [] };
+  const root = useMemo(() => {
+    const treeRoot: TreeNode = { name: "", path: "", is_dir: true, children: [] };
 
-  for (const f of files) {
-    const parts = f.path.split("/");
-    let current = root;
-    for (let i = 0; i < parts.length; i++) {
-      const part = parts[i];
-      const isLast = i === parts.length - 1;
-      const childPath = parts.slice(0, i + 1).join("/");
+    for (const f of files) {
+      const parts = f.path.split("/");
+      let current = treeRoot;
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i];
+        const isLast = i === parts.length - 1;
+        const childPath = parts.slice(0, i + 1).join("/");
 
-      let child = current.children.find((c) => c.name === part);
-      if (!child) {
-        child = {
-          name: part,
-          path: childPath,
-          is_dir: !isLast || f.is_dir,
-          children: [],
-          file: isLast ? f : undefined,
-        };
-        current.children.push(child);
-      } else if (isLast) {
-        child.file = f;
+        let child = current.children.find((c) => c.name === part);
+        if (!child) {
+          child = {
+            name: part,
+            path: childPath,
+            is_dir: !isLast || f.is_dir,
+            children: [],
+            file: isLast ? f : undefined,
+          };
+          current.children.push(child);
+        } else if (isLast) {
+          child.file = f;
+        }
+        current = child;
       }
-      current = child;
     }
-  }
+
+    return treeRoot;
+  }, [files]);
 
   const toggleExpand = (path: string) => {
     setExpanded((prev) => {

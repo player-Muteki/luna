@@ -79,7 +79,32 @@ fi
 "$VENV_DIR/bin/pip" install "$WHEEL_PATH" --quiet
 info "Installed to $VENV_DIR"
 
-# --- 3. Create PATH link ---
+# --- 3. Build web frontend ---
+step "Building web frontend"
+WEB_DIR=$("$VENV_DIR/bin/python" -c "import web, os; print(os.path.dirname(web.__file__))" 2>/dev/null || echo "")
+if [[ -n "$WEB_DIR" && -f "$WEB_DIR/package.json" ]]; then
+    if command -v npm &>/dev/null; then
+        info "Installing frontend dependencies (npm install)..."
+        if (cd "$WEB_DIR" && npm install --omit=dev) 2>&1; then
+            info "Frontend deps installed"
+            info "Building production bundle (npm run build)..."
+            if (cd "$WEB_DIR" && npm run build) 2>&1; then
+                info "Frontend built successfully"
+            else
+                warn "npm run build 失败，首次启动时自动构建"
+            fi
+        else
+            warn "npm install 失败，首次 co-thinker start 时自动安装"
+        fi
+    else
+        warn "npm 未安装 — 前端依赖将在首次 co-thinker start 时自动安装"
+        warn "推荐安装 Node.js (https://nodejs.org/) 以获得更快的启动体验"
+    fi
+else
+    info "web 前端包未检测到，跳过前端构建"
+fi
+
+# --- 4. Create PATH link ---
 step "Setting up PATH"
 
 BIN_DIR="$HOME/.local/bin"
@@ -92,7 +117,7 @@ fi
 ln -s "$VENV_DIR/bin/co-thinker" "$LINK"
 info "Created link: $LINK -> $VENV_DIR/bin/co-thinker"
 
-# --- 4. Check PATH ---
+# --- 5. Check PATH ---
 step "Checking PATH"
 SHELL_RC=""
 if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then

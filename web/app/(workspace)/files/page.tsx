@@ -21,11 +21,17 @@ export default function FilesPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [indexing, setIndexing] = useState(false);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [debouncedSearch]);
 
   const loadFiles = useCallback(async () => {
     setLoading(true);
     try {
-      const params = search ? `?search=${encodeURIComponent(search)}` : "";
+      const params = debouncedSearch ? `?search=${encodeURIComponent(debouncedSearch)}` : "";
       const res = await fetch(`/api/files${params}`);
       const data = await res.json();
       setFiles(data.files || []);

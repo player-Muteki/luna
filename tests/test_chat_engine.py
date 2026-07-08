@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from app.chat_engine import ChatEngine
+from core.chat_engine import ChatEngine
 
 
 def test_create_conversation_sets_current_id(tmp_path: Path) -> None:

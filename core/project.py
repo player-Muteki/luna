@@ -225,6 +225,43 @@ class ProjectContext:
         self.co_dir.mkdir(parents=True, exist_ok=True)
         self.vectordb_dir.mkdir(parents=True, exist_ok=True)
 
+    def setup_engines(self) -> None:
+        """组装所有 RAG 引擎组件（ingest, retriever, chat, generator）。
+
+        调用前需先设置好 llm 和 embedding_model。
+        """
+        from core.ingest import IngestionEngine, JsonVectorStore, DocumentManifest
+        from core.retriever import HybridRetriever
+        from core.generator import RAGGenerator
+        from core.chat_engine import ChatEngine
+
+        vectorstore = JsonVectorStore(self.chunks_path)
+        self.vectorstore = vectorstore
+
+        manifest = DocumentManifest(self.manifest_path)
+        self.manifest = manifest
+
+        self.ingest_engine = IngestionEngine(
+            config=self.config,
+            root=self.root,
+            embedding_model=self.embedding_model,
+            vector_store=vectorstore,
+        )
+        self.manifest = self.ingest_engine.manifest
+
+        self.retriever = HybridRetriever(
+            config=self.config,
+            vector_store=vectorstore,
+            embedding_model=self.embedding_model,
+        )
+
+        self.chat_engine = ChatEngine(
+            storage_path=self.sessions_path,
+            max_history_turns=self.config.max_history_turns,
+        )
+
+        self.generator = RAGGenerator(config=self.config, llm=self.llm)
+
     def save_config(self) -> None:
         """持久化当前配置。"""
         self.config.save(self.config_path)
@@ -362,6 +399,12 @@ def get_embedding_model(ctx: ProjectContext) -> Any | None:
     except ImportError:
         return None
     api_key = ctx.config.embedding_api_key or get_api_key(ctx)
+    if not ctx.config.embedding_api_key and ctx.config.embedding_base_url != ctx.config.base_url:
+        logger.warning(
+            "EMBEDDING_BASE_URL differs from the LLM base URL, but EMBEDDING_API_KEY is not set. "
+            "Falling back to the LLM API key — if the embedding provider is not DeepSeek, "
+            "set EMBEDDING_API_KEY explicitly to avoid sending credentials to a third party."
+        )
     client = OpenAI(api_key=api_key or "not-needed", base_url=ctx.config.embedding_base_url)
 
     class EmbeddingModel:

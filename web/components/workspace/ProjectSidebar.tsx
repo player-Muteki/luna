@@ -38,17 +38,21 @@ export default function ProjectSidebar({
   const pathname = usePathname();
   const router = useRouter();
 
+  // Fetch project info and sessions on mount only — index-updated event
+  // handles refreshes after indexing operations.
   useEffect(() => {
     fetch("/api/project")
       .then((r) => r.json())
       .then(setInfo)
       .catch(() => {});
+  }, []);
 
+  useEffect(() => {
     fetch("/api/sessions")
       .then((r) => r.json())
       .then((d) => setSessions(d.sessions || []))
       .catch(() => {});
-  }, [pathname]);
+  }, []);
 
   // 监听索引更新事件，自动刷新统计
   useEffect(() => {
@@ -98,11 +102,11 @@ export default function ProjectSidebar({
 
   return (
     <aside
-      className={`flex shrink-0 flex-col border-r border-black/10 bg-[var(--sidebar-bg)] text-[var(--sidebar-fg)] shadow-sm transition-all duration-200 ${
+      className={`flex shrink-0 flex-col border-r border-[var(--surface-border)] bg-[var(--sidebar-bg)] text-[var(--sidebar-fg)] shadow-sm transition-all duration-200 ${
         collapsed ? "w-14" : "w-72"
       }`}
     >
-      <div className="flex h-14 items-center justify-between border-b border-white/10 px-3">
+      <div className="flex h-14 items-center justify-between border-b border-[var(--sidebar-divider)] px-3">
         {!collapsed && (
           <Link href="/chat" className="min-w-0">
             <div className="truncate text-sm font-semibold tracking-wide">
@@ -157,8 +161,8 @@ export default function ProjectSidebar({
       ) : (
         <>
           {info && (
-            <div className="border-b border-white/10 px-3 py-3">
-              <div className="flex items-center gap-2 rounded-md bg-white/5 px-3 py-2">
+            <div className="border-b border-[var(--sidebar-divider)] px-3 py-3">
+              <div className="flex items-center gap-2 rounded-md bg-[var(--sidebar-active)] px-3 py-2">
                 <Database size={16} className="text-[var(--accent)]" />
                 <div className="min-w-0">
                   <div className="text-xs font-medium text-[var(--sidebar-fg)]">
@@ -172,7 +176,7 @@ export default function ProjectSidebar({
             </div>
           )}
 
-          <nav className="space-y-1 border-b border-white/10 p-2">
+            <nav className="space-y-1 border-b border-[var(--sidebar-divider)] p-2">
             <Link
               href="/files"
               className={`${navItemClass} ${
@@ -235,7 +239,7 @@ export default function ProjectSidebar({
                 </Link>
               ))}
               {sessions.length === 0 && (
-                <div className="rounded-md border border-white/10 px-3 py-4 text-sm text-[var(--sidebar-muted)]">
+                <div className="rounded-md border border-[var(--sidebar-divider)] px-3 py-4 text-sm text-[var(--sidebar-muted)]">
                   暂无会话
                 </div>
               )}
