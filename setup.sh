@@ -25,7 +25,7 @@ REQUIRED_MINOR=10
 
 for cmd in python3 python; do
     if command -v "$cmd" &>/dev/null; then
-        ver=$("$cmd" --version 2>&1 | grep -oP '\d+\.\d+\.\d+|\d+\.\d+')
+        ver=$("$cmd" --version 2>&1 | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?')
         major=${ver%%.*}
         minor=${ver#*.}
         minor=${minor%%.*}

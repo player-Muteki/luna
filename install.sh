@@ -24,7 +24,7 @@ step()  { echo -e "\n${BOLD}▶ $1${NC}"; }
 REPO="player-Muteki/co-thinker"
 
 if [[ $# -ge 1 && -f "$1" ]]; then
-    WHEEL_PATH="$(realpath "$1")"
+    WHEEL_PATH="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
 elif [[ $# -eq 0 ]]; then
     step "从 GitHub 获取最新版本"
     info "仓库: $REPO"
@@ -38,7 +38,7 @@ elif [[ $# -eq 0 ]]; then
         exit 1
     fi
     # 查找 .whl 文件下载链接
-    WHEEL_URL=$(echo "$RELEASE_DATA" | grep -oP 'https://[^"]+\.whl' | head -1)
+    WHEEL_URL=$(echo "$RELEASE_DATA" | grep -oE 'https://[^"\\]+\.whl' | head -1)
     if [[ -z "$WHEEL_URL" ]]; then
         error "没有找到 .whl 发布文件"
         exit 1
@@ -64,7 +64,7 @@ step "检查 Python"
 PYTHON=""
 for cmd in python3 python; do
     if command -v "$cmd" &>/dev/null; then
-        ver=$("$cmd" --version 2>&1 | grep -oP '\d+\.\d+')
+        ver=$("$cmd" --version 2>&1 | grep -oE '[0-9]+\.[0-9]+')
         major="${ver%.*}"
         minor="${ver#*.}"
         if [[ "$major" -ge 3 && "$minor" -ge 10 ]]; then
