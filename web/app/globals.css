@@ -103,6 +103,50 @@ button:disabled {
   color: var(--sidebar-fg);
 }
 
+/* Markdown 阅读视图 */
+.prose {
+  --tw-prose-body: var(--text-primary);
+  --tw-prose-headings: var(--text-primary);
+  --tw-prose-links: var(--accent);
+  --tw-prose-code: var(--accent);
+  --tw-prose-pre-bg: var(--surface-alt);
+  --tw-prose-pre-border: var(--surface-border);
+  --tw-prose-borders: var(--surface-border);
+  --tw-prose-quotes: var(--text-secondary);
+  --tw-prose-quote-borders: var(--surface-border);
+  max-width: none;
+}
+.prose pre {
+  background: var(--surface-alt);
+  border: 1px solid var(--surface-border);
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  overflow-x: auto;
+}
+.prose code {
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+.prose pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-weight: 400;
+}
+.prose img {
+  border-radius: 8px;
+}
+.prose table {
+  font-size: 0.875rem;
+}
+.prose th {
+  background: var(--surface-alt);
+}
+.dark .prose {
+  --tw-prose-body: var(--text-primary);
+  --tw-prose-invert-body: var(--text-primary);
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;

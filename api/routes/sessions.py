@@ -71,6 +71,7 @@ async def get_session(
                 "role": msg.role,
                 "content": msg.content,
                 "created_at": msg.created_at,
+                "metadata": msg.metadata,
             }
             for msg in conversation.messages
         ],

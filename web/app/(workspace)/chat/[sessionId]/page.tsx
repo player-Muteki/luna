@@ -1,15 +1,15 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import ChatMessages from "@/components/chat/ChatMessages";
+import ChatMessages, { type Message, type RetrievalDetails } from "@/components/chat/ChatMessages";
 import ChatComposer from "@/components/chat/ChatComposer";
 import { MessageSquare, Wifi, WifiOff } from "lucide-react";
 
 interface SessionData {
   id: string;
   title: string;
-  messages: { id: string; role: string; content: string; created_at: string }[];
+  messages: Message[];
 }
 
 export default function ChatSessionPage() {
@@ -19,6 +19,10 @@ export default function ChatSessionPage() {
   const [session, setSession] = useState<SessionData | null>(null);
   const [streaming, setStreaming] = useState(false);
   const [ws, setWs] = useState<WebSocket | null>(null);
+
+  // Refs to track retrieval/reasoning state during streaming (avoids stale closures)
+  const retrievalRef = useRef<RetrievalDetails | null>(null);
+  const reasoningRef = useRef("");
 
   // Load session data
   useEffect(() => {
@@ -36,7 +40,6 @@ export default function ChatSessionPage() {
   useEffect(() => {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const host = window.location.host;
-    // For dev mode with proxied API
     const wsUrl = `${protocol}//${host}/api/ws/chat`;
 
     const socket = new WebSocket(wsUrl);
@@ -46,29 +49,53 @@ export default function ChatSessionPage() {
     socket.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
-        if (msg.type === "chunk") {
+
+        if (msg.type === "retrieval_done") {
+          // Store retrieval details for the upcoming assistant message
+          const { type, ...details } = msg;
+          retrievalRef.current = details;
+        } else if (msg.type === "reasoning") {
+          // Accumulate reasoning text
+          reasoningRef.current += msg.content;
+        } else if (msg.type === "chunk") {
           setSession((prev) => {
             if (!prev) return prev;
             const messages = [...prev.messages];
             const last = messages[messages.length - 1];
+
             if (last && last.role === "assistant") {
+              // Append to existing assistant message
               messages[messages.length - 1] = {
                 ...last,
                 content: last.content + msg.content,
               };
             } else {
+              // Create new assistant message with retrieval/reasoning metadata
+              const metadata: Message["metadata"] = {};
+              if (retrievalRef.current) {
+                metadata.retrieval_details = retrievalRef.current;
+              }
+              if (reasoningRef.current) {
+                metadata.reasoning_text = reasoningRef.current;
+              }
               messages.push({
                 id: "streaming",
                 role: "assistant",
                 content: msg.content,
                 created_at: new Date().toISOString(),
+                metadata,
               });
+              // Clear refs for next message
+              retrievalRef.current = null;
+              reasoningRef.current = "";
             }
             return { ...prev, messages };
           });
         } else if (msg.type === "done") {
           setStreaming(false);
-          // Reload session to get proper IDs
+          retrievalRef.current = null;
+          reasoningRef.current = "";
+          // Reload session to get proper IDs and persisted metadata
           fetch(`/api/sessions/${msg.session_id || sessionId}`)
             .then((res) => res.json())
             .then((data) => setSession(data))

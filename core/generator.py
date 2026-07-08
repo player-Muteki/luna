@@ -180,14 +180,14 @@ class RAGGenerator:
         query: str,
         retrieval_results: RetrievalResults,
         chat_history: list[dict[str, Any]] | None = None,
-    ) -> Iterable[str]:
+    ) -> Iterable[dict[str, str]]:
         if not retrieval_results.results:
-            yield NO_RESULT_MESSAGE
+            yield {"type": "content", "content": NO_RESULT_MESSAGE}
             return
 
         if self.llm is None:
             result = self.generate(query, retrieval_results, chat_history)
-            yield result.answer
+            yield {"type": "content", "content": result.answer}
             return
 
         try:
@@ -205,10 +205,15 @@ class RAGGenerator:
                 if not choices:
                     continue
                 delta = choices[0].delta
-                if delta and delta.content:
-                    yield delta.content
+                if not delta:
+                    continue
+                reasoning = getattr(delta, "reasoning_content", None)
+                if reasoning:
+                    yield {"type": "reasoning", "content": reasoning}
+                if delta.content:
+                    yield {"type": "content", "content": delta.content}
         except Exception as exc:
-            yield self.friendly_error_message(exc)
+            yield {"type": "content", "content": self.friendly_error_message(exc)}
 
     def build_messages(
         self,

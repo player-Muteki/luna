@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import threading
 from typing import Any
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
@@ -91,8 +93,30 @@ async def _handle_query(
         chat_history=history,
     )
 
+    # 发送检索详情
+    retrieval_details = None
+    if retrieval_results.results:
+        retrieval_details = {
+            "mode": retrieval_results.mode,
+            "elapsed_ms": round(retrieval_results.elapsed_ms, 1),
+            "total_candidates": retrieval_results.total_candidates,
+            "effective_query": retrieval_results.effective_query,
+            "results": [
+                {
+                    "chunk_id": r.chunk_id,
+                    "source_path": r.source_path,
+                    "file_name": r.file_name,
+                    "score": round(r.final_score, 4),
+                    "matched_by": r.matched_by,
+                    "vector_score": round(r.vector_score, 4) if r.vector_score is not None else None,
+                    "bm25_score": round(r.bm25_score, 4) if r.bm25_score is not None else None,
+                }
+                for r in retrieval_results.results[:5]
+            ],
+        }
+        await ws.send_json({"type": "retrieval_done", **retrieval_details})
+
     if not retrieval_results.results:
-        # 记录用户消息 + 空回答
         if ctx.chat_engine:
             ctx.chat_engine.add_user_message(query_text)
             ctx.chat_engine.add_assistant_message("知识库中未找到相关信息")
@@ -110,18 +134,26 @@ async def _handle_query(
 
     # 流式生成
     full_answer = ""
-    async for chunk_text in _stream_generate(ctx, query_text, retrieval_results, history):
-        full_answer += chunk_text
-        await ws.send_json({"type": "chunk", "content": chunk_text})
-        import asyncio
-        await asyncio.sleep(0)  # yield to event loop
+    reasoning_text = ""
+    async for event_type, content in _stream_generate(ctx, query_text, retrieval_results, history):
+        if event_type == "reasoning":
+            reasoning_text += content
+            await ws.send_json({"type": "reasoning", "content": content})
+        else:
+            full_answer += content
+            await ws.send_json({"type": "chunk", "content": content})
 
-    # 记录助手消息
+    # 记录助手消息（附加检索与推理元数据）
+    metadata = {}
+    if retrieval_details:
+        metadata["retrieval_details"] = retrieval_details
+    if reasoning_text:
+        metadata["reasoning_text"] = reasoning_text
     if ctx.chat_engine:
-        ctx.chat_engine.add_assistant_message(full_answer)
+        ctx.chat_engine.add_assistant_message(full_answer, **metadata)
 
     # 发送完成信号
-    references = retrieval_results.to_sources()[:10] if retrieval_results.results else []
+    references = retrieval_results.to_sources()[:10]
     await ws.send_json({
         "type": "done",
         "session_id": ctx.chat_engine.current_id if ctx.chat_engine else None,
@@ -136,18 +168,30 @@ async def _stream_generate(
     retrieval_results: Any,
     history: list[dict[str, str]] | None,
 ):
-    """流式生成回答的异步包装。"""
-    loop = None
-    try:
-        import asyncio
-        loop = asyncio.get_event_loop()
+    """流式生成回答 — 使用 asyncio.Queue 桥接同步生成器到异步上下文，实现逐块推送。"""
+    loop = asyncio.get_event_loop()
+    queue: asyncio.Queue = asyncio.Queue(maxsize=64)
 
-        def _sync_stream():
-            return list(ctx.generator.stream_generate(query_text, retrieval_results, history))
+    def _produce():
+        try:
+            for event in ctx.generator.stream_generate(query_text, retrieval_results, history):
+                future = asyncio.run_coroutine_threadsafe(queue.put(event), loop)
+                future.result()
+        except Exception as exc:
+            logger.exception("Generation error in thread")
+            future = asyncio.run_coroutine_threadsafe(
+                queue.put(("content", f"生成答案时发生错误：{str(exc)}")),
+                loop,
+            )
+            future.result()
+        finally:
+            asyncio.run_coroutine_threadsafe(queue.put(None), loop).result()
 
-        chunks = await loop.run_in_executor(None, _sync_stream)
-        for chunk in chunks:
-            yield chunk
-    except Exception as exc:
-        logger.exception("Generation error")
-        yield f"生成答案时发生错误：{str(exc)}"
+    thread = threading.Thread(target=_produce, daemon=True)
+    thread.start()
+
+    while True:
+        event = await queue.get()
+        if event is None:
+            break
+        yield event
