@@ -120,9 +120,24 @@ def unique_target_path(path: Path) -> Path:
 
 
 def render_right_column() -> None:
-    """Render the right column: session management."""
+    """Right column: retrieval mode → session management."""
     chat_engine = st.session_state.chat_engine
 
+    # ── 检索模式（精简一行） ──
+    st.markdown("### 🔍 检索模式")
+
+    st.selectbox(
+        "检索方式",
+        options=["hybrid", "vector", "bm25"],
+        key="retrieval_mode",
+        label_visibility="collapsed",
+        help="hybrid：混合检索（推荐）；vector：仅向量检索；bm25：仅关键词检索",
+    )
+    st.caption("hybrid（推荐）· vector · bm25")
+
+    st.divider()
+
+    # ── 会话 ──
     st.markdown("### 💬 会话")
 
     if st.button("➕ 新建会话", use_container_width=True, type="primary"):
@@ -177,30 +192,34 @@ def render_right_column() -> None:
 
 
 def render_left_column() -> None:
-    """Render the left column: settings → document import → retrieval mode → file list."""
+    """Render the left column: settings → document import → file list."""
     settings = current_settings()
     engine = st.session_state.ingest_engine
 
-    # ── 参数设置（用户友好版） ──
+    # ── 参数设置（紧凑版） ──
     st.markdown("### ⚙️ 检索设置")
-    ref_count = st.slider(
-        "参考片段数",
-        min_value=1, max_value=10, value=settings.top_k,
-        help="每次问答时，从知识库中取出多少个相关片段作为参考依据",
-    )
-    match_level = st.slider(
-        "匹配相关度",
-        min_value=0.0, max_value=1.0,
-        value=float(settings.similarity_cutoff), step=0.05,
-        help="数值越高要求越严格，结果更少但更精准；数值越低会带来更多结果但可能包含不相关内容",
-    )
-    if st.button("✅ 应用检索设置", use_container_width=True):
-        st.session_state.runtime_overrides = {
-            "top_k": ref_count,
-            "similarity_cutoff": match_level,
-        }
-        reset_runtime_objects()
-        st.success("检索设置已更新。")
+    ref_col, match_col, btn_col = st.columns([1, 1, 1])
+    with ref_col:
+        ref_count = st.number_input(
+            "参考片段数", min_value=1, max_value=10, value=settings.top_k,
+            help="每次问答取多少个片段作参考",
+        )
+    with match_col:
+        match_level = st.number_input(
+            "匹配相关度",
+            min_value=0.0, max_value=1.0,
+            value=float(settings.similarity_cutoff), step=0.05, format="%.2f",
+            help="越高越精准，越低结果越多但可能不相关",
+        )
+    with btn_col:
+        st.markdown("<div style='height:1.5rem'></div>", unsafe_allow_html=True)
+        if st.button("应用", use_container_width=True):
+            st.session_state.runtime_overrides = {
+                "top_k": ref_count,
+                "similarity_cutoff": match_level,
+            }
+            reset_runtime_objects()
+            st.success("已更新。")
 
     st.divider()
 
@@ -261,20 +280,6 @@ def render_left_column() -> None:
                     use_container_width=True,
                     hide_index=True,
                 )
-
-    # ── 检索模式 ──
-    st.divider()
-    st.markdown("### 🔍 检索模式")
-    st.selectbox(
-        "检索方式",
-        options=["hybrid", "vector", "bm25"],
-        key="retrieval_mode",
-        label_visibility="collapsed",
-        help="hybrid：混合检索（推荐）；vector：仅向量检索；bm25：仅关键词检索",
-    )
-    st.caption("hybrid 为混合检索（推荐），vector 仅向量，bm25 仅关键词")
-
-    st.divider()
 
     # ── 文档管理区 ──
     st.markdown("### 📂 文件列表")
@@ -534,24 +539,56 @@ def main() -> None:
     st.set_page_config(page_title="Co-Thinker", layout="wide")
     init_session_state()
 
-    # Inject custom CSS for column stability
+    # Inject CSS: each column is fixed at viewport height and scrolls independently.
+    # The column container (data-testid="column") sits in a flex row inside
+    # data-testid="stHorizontalBlock". We force that row to fill the remaining
+    # viewport, then each column becomes a scrollable pane.
     st.markdown(
         """
         <style>
-        /* Keep columns scrollable independently */
-        div[data-testid="column"] > div:first-child {
-            height: calc(100vh - 8rem);
-            overflow-y: auto;
-            padding-right: 0.75rem;
+        /* Full-height horizontal block (the columns row) */
+        div[data-testid="stHorizontalBlock"] {
+            height: calc(100vh - 6rem) !important;
+            gap: 0.75rem;
+            align-items: stretch;
         }
-        /* Hide scrollbar for cleaner look */
+        /* Each column is a scrollable pane */
+        div[data-testid="column"] {
+            height: 100% !important;
+            min-height: 0 !important;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        /* The inner wrapper scrolls */
+        div[data-testid="column"] > div:first-child {
+            height: 100% !important;
+            overflow-y: auto !important;
+            padding-right: 0.5rem;
+            scrollbar-width: thin;
+            scrollbar-color: #ddd transparent;
+        }
         div[data-testid="column"] > div:first-child::-webkit-scrollbar {
-            display: none;
+            width: 4px;
+        }
+        div[data-testid="column"] > div:first-child::-webkit-scrollbar-thumb {
+            background: #ddd;
+            border-radius: 2px;
+        }
+        /* Hide Streamlit header/decorations for max space */
+        header { display: none !important; }
+        #MainMenu, footer { display: none; }
+        .block-container {
+            padding-top: 1rem !important;
+            padding-bottom: 0 !important;
+            max-width: 100% !important;
         }
         </style>
         """,
         unsafe_allow_html=True,
     )
+
+    st.title("Co-Thinker")
 
     left_col, mid_col, right_col = st.columns([1.3, 2, 1])
 

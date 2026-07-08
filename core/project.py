@@ -1,0 +1,322 @@
+"""
+ProjectContext — Co-Thinker 与工作目录的绑定桩。
+
+每个进程绑定到一个 CWD，通过它访问所有资源。
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+import re as _re
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    load_dotenv = None
+
+logger = logging.getLogger(__name__)
+
+# ── 默认配置值 ────────────────────────────────────────────────────────
+
+
+def _default_exclude_patterns() -> list[str]:
+    return [".git", "__pycache__", "node_modules", ".venv", ".co-thinker", ".DS_Store"]
+
+
+def _default_supported_extensions() -> list[str]:
+    return [
+        ".c", ".cpp", ".cs", ".go", ".h", ".java", ".js", ".jsx",
+        ".md", ".mdx", ".php", ".py", ".rb", ".rs", ".ts", ".tsx", ".txt",
+        ".json", ".yaml", ".yml", ".toml", ".xml",
+        ".csv", ".sql", ".log",
+        ".pdf", ".docx", ".pptx",
+    ]
+
+
+@dataclass
+class ProjectConfig:
+    """从 .co-thinker/config.toml 读取的配置"""
+    model: str = "deepseek-chat"
+    base_url: str = "https://api.deepseek.com"
+    embedding_model: str = ""
+    embedding_base_url: str = "https://api.openai.com/v1"
+    embedding_api_key: str = ""
+    chunk_size: int = 800
+    chunk_overlap: int = 120
+    top_k: int = 5
+    retrieval_candidate_k: int = 20
+    similarity_cutoff: float = 0.25
+    rrf_k: int = 60
+    vector_weight: float = 0.55
+    bm25_weight: float = 0.45
+    max_tokens: int = 2048
+    temperature: float = 0.2
+    context_token_budget: int = 6000
+    max_history_turns: int = 10
+    log_level: str = "INFO"
+    parser_engine: str = "auto"
+    exclude_patterns: list[str] = field(default_factory=_default_exclude_patterns)
+    max_file_size_mb: int = 20
+    supported_extensions: list[str] = field(default_factory=_default_supported_extensions)
+
+    @classmethod
+    def load(cls, path: Path) -> "ProjectConfig":
+        """从 TOML 文件加载配置，若文件不存在则返回默认配置。"""
+        if not path.exists():
+            return cls()
+
+        raw = path.read_text(encoding="utf-8")
+        if not raw.strip():
+            return cls()
+
+        try:
+            import tomli
+        except ImportError:
+            tomli = None
+
+        if tomli is None:
+            try:
+                import tomllib as tomli  # type: ignore[no-redef]
+            except ImportError:
+                raise RuntimeError("需要 tomli 或 Python 3.11+ 来读取 TOML 配置")
+
+        data = tomli.loads(raw)
+
+        known_keys = set(cls.__dataclass_fields__.keys())
+        config_data = {}
+        if "project" in data:
+            for key, value in data["project"].items():
+                if key in known_keys:
+                    config_data[key] = value
+                else:
+                    logger.warning("Unknown config key [project].%s, ignoring", key)
+
+        return cls(**config_data)
+
+    def save(self, path: Path) -> None:
+        """将配置保存为 TOML 文件。"""
+        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            import tomli_w
+        except ImportError:
+            raise RuntimeError("需要 tomli-w 来写入 TOML 配置")
+
+        config_dict = {}
+        for field_name in self.__dataclass_fields__:
+            value = getattr(self, field_name)
+            config_dict[field_name] = value
+
+        import tomli_w as _tomli_w
+        content = "# Co-Thinker Project Configuration\n" + _tomli_w.dumps({"project": config_dict})
+        path.write_text(content, encoding="utf-8")
+
+
+class ProjectContext:
+    """绑定到一个工作目录，持有 RAG 引擎的所有状态。"""
+
+    def __init__(self, root: Path):
+        self.root = root.resolve()
+        self.co_dir = self.root / ".co-thinker"
+        self.config_path = self.co_dir / "config.toml"
+        self.env_path = self.co_dir / ".env"
+        self.vectordb_dir = self.co_dir / "vectordb"
+        self.chunks_path = self.vectordb_dir / "chunks.json"
+        self.manifest_path = self.vectordb_dir / "manifest.json"
+        self.sessions_path = self.co_dir / "sessions.jsonl"
+
+        self.config = ProjectConfig.load(self.config_path)
+        self._load_env()
+
+        # 各种引擎（由外部工厂组装后设置）
+        self.vectorstore: Any | None = None
+        self.manifest: Any | None = None
+        self.embedding_model: Any | None = None
+        self.llm: Any | None = None
+        self.ingest_engine: Any | None = None
+        self.retriever: Any | None = None
+        self.chat_engine: Any | None = None
+
+    @staticmethod
+    def load(explicit: str | None = None) -> "ProjectContext":
+        """
+        解析项目根目录并创建 ProjectContext。
+        优先级：
+        1. explicit（--dir 参数）
+        2. CWD
+        """
+        if explicit:
+            root = Path(explicit).resolve()
+        else:
+            root = Path.cwd().resolve()
+
+        ctx = ProjectContext(root)
+        ctx._ensure_co_dir()
+        return ctx
+
+    def _ensure_co_dir(self) -> None:
+        """确保 .co-thinker/ 及子目录存在。"""
+        self.co_dir.mkdir(parents=True, exist_ok=True)
+        self.vectordb_dir.mkdir(parents=True, exist_ok=True)
+
+    def _load_env(self) -> None:
+        """从 .co-thinker/.env 加载环境变量（如果有）。"""
+        if self.env_path.exists() and load_dotenv is not None:
+            load_dotenv(dotenv_path=self.env_path, override=False)
+
+    def save_config(self) -> None:
+        """持久化当前配置。"""
+        self.config.save(self.config_path)
+
+    # ── 文件扫描 ─────────────────────────────────────────────────────
+
+    def scan_files(self, subdir: str | None = None) -> list[dict[str, Any]]:
+        """
+        扫描工作目录，返回文件列表（含索引状态），供前端勾选。
+        返回每个文件的 dict：path, name, ext, size, mtime, is_dir, is_indexed, document_id
+        """
+        scan_root = self.root
+        if subdir:
+            scan_root = self.root / subdir
+            if not scan_root.exists():
+                return []
+
+        exclude_set = set(self.config.exclude_patterns)
+        ext_set = set(self.config.supported_extensions)
+        max_bytes = self.config.max_file_size_mb * 1024 * 1024
+
+        # 收集已索引的文档以便标注状态
+        indexed_map: dict[str, str] = {}
+        if self.manifest:
+            for doc in self.manifest.list_documents():
+                if doc.get("status") == "indexed":
+                    indexed_map[doc["source_path"]] = doc["document_id"]
+
+        files: list[dict[str, Any]] = []
+        for path in scan_root.rglob("*"):
+            rel = path.relative_to(self.root)
+
+            # 排除
+            if any(part in exclude_set for part in path.parts):
+                continue
+            if any(part.startswith(".") for part in path.parts):
+                continue
+            if ".co-thinker" in path.parts:
+                continue
+
+            if path.is_dir():
+                files.append({
+                    "path": str(rel),
+                    "name": path.name,
+                    "ext": "",
+                    "size": 0,
+                    "mtime": path.stat().st_mtime,
+                    "is_dir": True,
+                    "is_indexed": False,
+                    "document_id": "",
+                })
+            elif path.is_file():
+                if path.suffix.lower() not in ext_set:
+                    continue
+                if path.stat().st_size > max_bytes:
+                    continue
+
+                sp = str(rel)
+                doc_id = indexed_map.get(sp, "")
+                files.append({
+                    "path": sp,
+                    "name": path.name,
+                    "ext": path.suffix.lower(),
+                    "size": path.stat().st_size,
+                    "mtime": path.stat().st_mtime,
+                    "is_dir": False,
+                    "is_indexed": bool(doc_id),
+                    "document_id": doc_id,
+                })
+
+        # 目录优先，然后再按路径排序
+        files.sort(key=lambda f: (not f["is_dir"], f["path"]))
+        return files
+
+    def get_project_info(self) -> dict[str, Any]:
+        """返回项目信息，供前端展示。"""
+        stats = {}
+        if self.manifest:
+            docs = self.manifest.list_documents()
+            indexed = [d for d in docs if d.get("status") == "indexed"]
+            stats = {
+                "document_count": len(docs),
+                "indexed_count": len(indexed),
+                "chunk_count": self.vectorstore.count_chunks() if self.vectorstore else 0,
+            }
+
+        return {
+            "root": str(self.root),
+            "name": self.root.name,
+            "config": {
+                "model": self.config.model,
+                "chunk_size": self.config.chunk_size,
+                "top_k": self.config.top_k,
+                "max_history_turns": self.config.max_history_turns,
+            },
+            "stats": stats,
+        }
+
+
+# ── 辅助函数 ──────────────────────────────────────────────────────────
+
+
+def get_api_key(ctx: ProjectContext) -> str:
+    """从环境变量获取 API Key，优先级：进程环境变量 > .co-thinker/.env。"""
+    key = os.getenv("DEEPSEEK_API_KEY", "")
+    if not key:
+        if ctx.env_path.exists():
+            m = _re.search(r'^DEEPSEEK_API_KEY=(.+)$', ctx.env_path.read_text(encoding="utf-8"), _re.MULTILINE)
+            if m:
+                key = m.group(1).strip().strip('"\'')
+    return key
+
+
+def get_llm(ctx: ProjectContext) -> Any:
+    """创建 OpenAI 兼容客户端。"""
+    api_key = get_api_key(ctx)
+    if not api_key:
+        raise ValueError("DEEPSEEK_API_KEY 未设置")
+    try:
+        from openai import OpenAI
+    except ImportError:
+        raise RuntimeError("openai 包未安装")
+    return OpenAI(api_key=api_key, base_url=ctx.config.base_url)
+
+
+def get_embedding_model(ctx: ProjectContext) -> Any | None:
+    """创建 embedding 模型（如果配置了）。"""
+    if not ctx.config.embedding_model:
+        return None
+    try:
+        from openai import OpenAI
+    except ImportError:
+        return None
+    api_key = ctx.config.embedding_api_key or get_api_key(ctx)
+    client = OpenAI(api_key=api_key or "not-needed", base_url=ctx.config.embedding_base_url)
+
+    class EmbeddingModel:
+        def __init__(self, model_name: str, client: Any):
+            self.model_name = model_name
+            self.client = client
+
+        def get_text_embedding(self, text: str) -> list[float]:
+            return self.get_text_embedding_batch([text])[0]
+
+        def get_query_embedding(self, query: str) -> list[float]:
+            return self.get_text_embedding(query)
+
+        def get_text_embedding_batch(self, texts: list[str]) -> list[list[float]]:
+            response = self.client.embeddings.create(input=texts, model=self.model_name)
+            return [item.embedding for item in response.data]
+
+    return EmbeddingModel(ctx.config.embedding_model, client)

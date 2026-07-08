@@ -1,37 +1,23 @@
+# Co-Thinker (新版)
+.co-thinker/.env
+
+# Co-Thinker (旧版)
+.env
+data/
+vectorstore/
+storage/
+
 # Python
 __pycache__/
-*.py[cod]
-*.egg-info/
+*.pyc
+*.pyo
+.egg-info/
 dist/
 build/
-.venv/
-venv/
-env/
 
 # IDE
 .vscode/
 .idea/
 
 # OS
-Thumbs.db
 .DS_Store
-
-# Environment
-.env
-*.env.local
-
-# Data (runtime only)
-*.db
-*.sqlite
-uploads/
-vectorstore/
-storage/
-
-# Data (sampled knowledge docs — keep in git, remove if sample is too large)
-data/  # uncomment if data files are generated/downloaded, not source-controlled
-
-# Logs
-*.log
-
-# Plans / Specs
-.deepseek/

@@ -1,31 +1,27 @@
 """
-Co-Thinker CLI — Launch the web UI from the terminal.
-
-Works in both development mode (``python cli.py start``) and installed mode
-(``co-thinker start`` after ``pip install``).
+Co-Thinker CLI — 工作目录绑定型 RAG 知识库系统。
 
 Usage:
-    co-thinker start              Launch the Streamlit web UI
+    co-thinker init             在当前目录创建 .co-thinker/ + 默认配置
+    co-thinker start            启动 Web UI（FastAPI + Next.js）
     co-thinker start --port 8080
-    co-thinker init               Set up a working directory
-    co-thinker version             Show version
+    co-thinker run "问题"       非交互式一键问答
+    co-thinker scan             扫描工作目录，显示文件索引状态
+    co-thinker version          显示版本
 """
 
 from __future__ import annotations
 
+import logging
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import typer
 
 from __version__ import __version__
-
-try:
-    from dotenv import load_dotenv
-except ImportError:  # pragma: no cover
-    load_dotenv = None
 
 BANNER = r"""
    ____          _   _   _           _
@@ -34,87 +30,94 @@ BANNER = r"""
  | |__| (_) | (_| | | |_| | | | | | |   <  __/ |
   \____\___/ \__,_|  \__|_| |_|_| |_|_|\_\___|_|
 
-  基于 RAG 的本地知识问答系统  v{version}
+  基于 RAG 的工作目录知识库  v{version}
 """
 
 app = typer.Typer(
     name="co-thinker",
-    help="基于 RAG 的本地知识问答系统",
+    help="基于 RAG 的工作目录知识库系统",
     no_args_is_help=True,
     add_completion=False,
 )
 
-# ── helpers ──────────────────────────────────────────────────────────
-
-
-def _find_streamlit_app() -> Path:
-    """Locate ``app/streamlit_app.py`` whether we are installed or in source tree.
-
-    When installed (``pip install``), cli.py and app/ are both under
-    site-packages.  When run from source, both are under the project root.
-    In either case ``parent / "app" / ...`` resolves correctly.
-    """
-    candidate = Path(__file__).resolve().parent / "app" / "streamlit_app.py"
-    if candidate.exists():
-        return candidate
-    raise typer.Exit(
-        "[ERROR] 找不到 app/streamlit_app.py。"
-        "请确认 Co-Thinker 已正确安装 (pip install) 或在项目根目录下运行。"
-    )
+logging.basicConfig(level=logging.INFO, format="%(message)s")
+logger = logging.getLogger(__name__)
 
 
 def _banner(version: str) -> str:
     return BANNER.format(version=version)
 
 
-def _ensure_runtime_dirs(cwd: Path) -> None:
-    """Create runtime directories in the user's working directory if missing."""
-    for name in ("data", "vectorstore", "storage"):
-        (cwd / name).mkdir(parents=True, exist_ok=True)
+def _setup_project_context() -> object:
+    """Create and wire up a ProjectContext with all engines."""
+    from core.project import ProjectContext, get_api_key, get_llm, get_embedding_model
+    from core.ingest import IngestionEngine, JsonVectorStore, DocumentManifest
+    from core.retriever import HybridRetriever
+    from core.generator import RAGGenerator
+    from core.chat_engine import ChatEngine
+
+    ctx = ProjectContext.load()
+    ctx._ensure_co_dir()
+
+    # API key
+    try:
+        api_key = get_api_key(ctx)
+    except Exception:
+        api_key = ""
+
+    llm = None
+    if api_key:
+        try:
+            llm = get_llm(ctx)
+            ctx.llm = llm
+        except Exception:
+            pass
+
+    embedding_model = get_embedding_model(ctx)
+    ctx.embedding_model = embedding_model
+
+    # Vector store
+    vectorstore = JsonVectorStore(ctx.chunks_path)
+    ctx.vectorstore = vectorstore
+
+    # Manifest
+    manifest = DocumentManifest(ctx.manifest_path)
+    ctx.manifest = manifest
+
+    # Ingest engine
+    ingest = IngestionEngine(
+        config=ctx.config,
+        root=ctx.root,
+        embedding_model=embedding_model,
+        vector_store=vectorstore,
+    )
+    ctx.ingest_engine = ingest
+
+    # Retriever
+    retriever = HybridRetriever(
+        config=ctx.config,
+        vector_store=vectorstore,
+        embedding_model=embedding_model,
+    )
+    ctx.retriever = retriever
+
+    # Chat engine
+    chat_engine = ChatEngine(
+        storage_path=ctx.sessions_path,
+        max_history_turns=ctx.config.max_history_turns,
+    )
+    ctx.chat_engine = chat_engine
+
+    # Generator
+    generator = RAGGenerator(config=ctx.config, llm=llm)
+    ctx.generator = generator
+
+    return ctx
 
 
-def _prompt_env(cwd: Path) -> Path | None:
-    """Create a .env file if missing, return its path or None."""
-    env_path = cwd / ".env"
-    if env_path.exists():
-        return env_path
-
-    typer.echo("[WARN] 未检测到 .env 文件。")
-    if not typer.confirm("  是否现在创建？（需要填入 DeepSeek API Key）", default=True):
-        return None
-
-    api_key = typer.prompt("  DeepSeek API Key", hide_input=True)
-    if not api_key:
-        typer.echo("  [SKIP] 跳过，稍后可手动创建 .env")
-        return None
-
-    template = f"""# Co-Thinker 配置 — 由 `co-thinker init` 自动生成
-DEEPSEEK_API_KEY={api_key}
-DEEPSEEK_BASE_URL=https://api.deepseek.com
-DEEPSEEK_MODEL=deepseek-chat
-DATA_DIR=data
-VECTORSTORE_DIR=vectorstore
-STORAGE_DIR=storage
-CHUNK_SIZE=800
-CHUNK_OVERLAP=120
-TOP_K=5
-RETRIEVAL_CANDIDATE_K=20
-SIMILARITY_CUTOFF=0.25
-RRF_K=60
-VECTOR_WEIGHT=0.55
-BM25_WEIGHT=0.45
-MAX_TOKENS=2048
-TEMPERATURE=0.2
-CONTEXT_TOKEN_BUDGET=6000
-MAX_HISTORY_TURNS=10
-LOG_LEVEL=INFO
-"""
-    env_path.write_text(template, encoding="utf-8")
-    typer.echo(f"  [OK] .env 已创建: {env_path}")
-    return env_path
-
-
-# ── commands ─────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════
+#  Commands
+# ═══════════════════════════════════════════════════════════════════════
 
 
 @app.command()
@@ -124,7 +127,7 @@ def init(
         help="工作目录（默认当前目录）",
     ),
 ):
-    """在当前目录初始化工作环境（创建 .env 和运行时目录）"""
+    """在当前目录初始化 .co-thinker/ 配置目录"""
     cwd = dir.resolve()
     cwd.mkdir(parents=True, exist_ok=True)
 
@@ -132,14 +135,38 @@ def init(
     typer.echo(f"[DIR] 工作目录: {cwd}")
     typer.echo("")
 
-    _ensure_runtime_dirs(cwd)
-    typer.echo("[OK] 已创建: data/  vectorstore/  storage/")
+    co_dir = cwd / ".co-thinker"
+    vectordb_dir = co_dir / "vectordb"
+    config_path = co_dir / "config.toml"
+    env_path = co_dir / ".env"
 
-    env_path = cwd / ".env"
-    if env_path.exists():
-        typer.echo(f"[OK] 已存在: .env")
+    co_dir.mkdir(parents=True, exist_ok=True)
+    vectordb_dir.mkdir(parents=True, exist_ok=True)
+    typer.echo(f"[OK] 已创建: {co_dir}/")
+
+    # 创建默认 config.toml
+    if not config_path.exists():
+        try:
+            import tomli_w
+        except ImportError:
+            os.system(f"{sys.executable} -m pip install tomli-w")
+            try:
+                import tomli_w  # type: ignore[import-untyped]
+            except ImportError:
+                typer.echo("[WARN] 无法安装 tomli-w，跳过 config.toml 创建")
+                config_path = None
+
+        if config_path:
+            _write_default_config(config_path)
+            typer.echo(f"[OK] 已创建: {config_path}")
     else:
-        _prompt_env(cwd)
+        typer.echo(f"[OK] 已存在: {config_path}")
+
+    # 创建 .env（如果需要）
+    if not env_path.exists():
+        _prompt_env(env_path, cwd)
+    else:
+        typer.echo(f"[OK] 已存在: {env_path}")
 
     typer.echo("")
     typer.echo("[DONE] 初始化完成！运行 co-thinker start 启动 Web 界面。")
@@ -147,83 +174,117 @@ def init(
 
 @app.command()
 def start(
-    port: int = typer.Option(8501, "--port", "-p", help="Web UI 端口号"),
+    port: int = typer.Option(3001, "--port", "-p", help="Web UI 端口号"),
+    api_port: int = typer.Option(8765, "--api-port", help="API 服务端口号"),
     open_browser: bool = typer.Option(True, "--open/--no-open", help="启动后自动打开浏览器"),
-    debug: bool = typer.Option(False, "--debug", "-d", help="显示 Streamlit 详情日志"),
 ):
-    """启动 Co-Thinker Web 界面"""
-    streamlit_app = _find_streamlit_app()
+    """启动 Co-Thinker Web 界面（FastAPI + Next.js）"""
     cwd = Path.cwd().resolve()
-
     print(_banner(__version__))
-    typer.echo(f"[PORT] 端口: {port}")
     typer.echo(f"[DIR] 工作目录: {cwd}")
-    typer.echo(f"[APP] 应用入口: {streamlit_app}")
-    typer.echo("")
 
-    # 确保运行时目录存在
-    _ensure_runtime_dirs(cwd)
-
-    # ── 优先从 .env 文件加载环境变量 ─────────────────────────
-    dotenv_path = cwd / ".env"
-    if dotenv_path.exists():
-        if load_dotenv is not None:
-            load_dotenv(dotenv_path=dotenv_path, override=True)
-            typer.echo(f"[ENV] 已加载: {dotenv_path}")
-        else:
-            typer.echo("[WARN] python-dotenv 未安装，请 pip install python-dotenv")
-    else:
-        typer.echo("[WARN] 工作目录中未找到 .env 文件。")
-        typer.echo("   运行 co-thinker init 来创建，或手动创建 .env 后重试。")
-        typer.echo("   当前会尝试读取已有的环境变量。")
+    # 检查 .co-thinker 是否存在
+    co_dir = cwd / ".co-thinker"
+    if not co_dir.exists():
+        typer.echo("[WARN] 未检测到 .co-thinker/ 目录。请先运行 co-thinker init。")
+        typer.echo("")
+        if not typer.confirm("是否现在就初始化？", default=True):
+            raise typer.Exit(1)
+        init(dir=cwd)
         typer.echo("")
 
-    env = os.environ.copy()
-    env["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
-    env["STREAMLIT_GATHER_USAGE_STATS"] = "false"
+    # 加载 .co-thinker/.env
+    env_path = co_dir / ".env"
+    if env_path.exists():
+        os.environ.setdefault("CO_THINKER_ROOT", str(cwd))
 
-    cmd = [
-        sys.executable,
-        "-m",
-        "streamlit",
-        "run",
-        str(streamlit_app),
-        "--server.port",
-        str(port),
-        "--server.headless",
-        "true",
-    ]
-    if debug:
-        cmd.extend(["--logger.level", "debug"])
+    web_dir = Path(__file__).resolve().parent / "web"
+
+    # 检查 Next.js 前端是否存在
+    if web_dir.exists():
+        typer.echo(f"[WEB] 启动 Next.js 前端 (port {port})...")
+        _start_full_stack(web_dir, port, api_port, cwd, open_browser)
     else:
-        cmd.extend(["--logger.level", "warning"])
+        typer.echo(f"[WEB] 前端尚未构建，仅启动 API 服务 (port {api_port})")
+        _start_api_only(api_port, cwd)
 
-    if open_browser:
-        import webbrowser
 
-        webbrowser.open(f"http://localhost:{port}")
+@app.command()
+def run(
+    query: str = typer.Argument(
+        ...,
+        help="要提问的问题",
+    ),
+    dir: str = typer.Option(None, "--dir", help="项目目录（默认当前目录）"),
+):
+    """非交互式一键问答（CLI 模式）"""
+    print(_banner(__version__))
+    typer.echo(f"[Q] {query}")
+    typer.echo("")
 
-    try:
-        typer.echo("[START] 正在启动...")
-        process = subprocess.Popen(cmd, cwd=str(cwd), env=env)
-        process.wait()
-    except KeyboardInterrupt:
-        typer.echo("\n[EXIT] 关闭中...")
-        process.terminate()
-        try:
-            process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            process.kill()
-        typer.echo("[OK] Co-Thinker 已关闭")
+    ctx = _setup_project_context()
+
+    # 确保有索引数据
+    if not ctx.vectorstore or ctx.vectorstore.count_chunks() == 0:
+        typer.echo("[INFO] 索引为空，正在扫描并索引文件...")
+        files = ctx.ingest_engine.scan_files()
+        if files:
+            summary = ctx.ingest_engine.add_files(files)
+            typer.echo(f"[OK] 已索引 {summary.indexed_files} 个文件，共 {summary.total_chunks} 个片段")
+        else:
+            typer.echo("[WARN] 工作目录中未找到可索引的文件")
+            raise typer.Exit(0)
+
+    # 检索
+    results = ctx.retriever.retrieve(query)
+    if not results.results:
+        typer.echo("[INFO] 知识库中未找到相关信息")
+        raise typer.Exit(0)
+
+    # 生成
+    generation = ctx.generator.generate(query, results)
+    typer.echo(generation.answer)
+    typer.echo("")
+
+    # 显示引用来源
+    if generation.references:
+        typer.echo("── 引用来源 ──")
+        for i, ref in enumerate(generation.references[:5], 1):
+            typer.echo(f"  [{i}] {ref.source_path} (score: {ref.score:.3f})")
+
+
+@app.command()
+def scan(
+    dir: str = typer.Option(None, "--dir", help="项目目录（默认当前目录）"),
+):
+    """扫描工作目录，显示文件索引状态"""
+    from core.project import ProjectContext
+
+    ctx = ProjectContext.load(dir)
+    files = ctx.scan_files()
+
+    files_only = [f for f in files if not f["is_dir"]]
+    dirs_only = [f for f in files if f["is_dir"]]
+
+    indexed = sum(1 for f in files_only if f["is_indexed"])
+    total = len(files_only)
+
+    typer.echo(f"工作目录: {ctx.root}")
+    typer.echo(f"文件总数: {total}, 已索引: {indexed}")
+    typer.echo("")
+
+    # 显示文件树
+    for d in dirs_only:
+        typer.echo(f"  📁 {d['path']}/")
+    for f in files_only:
+        status = "☑" if f["is_indexed"] else "☐"
+        typer.echo(f"  {status} {f['path']} ({_fmt_size(f['size'])})")
 
 
 @app.command()
 def version():
     """显示版本与系统信息"""
     print(_banner(__version__))
-
-    # 检测安装方式
-    import app as _app_pkg
 
     installed_path = Path(__file__).resolve().parent
     in_site_packages = "site-packages" in installed_path.parts
@@ -234,7 +295,159 @@ def version():
     typer.echo(f"Python:    {sys.version.split()[0]}")
 
 
-# ── entry point ──────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════
+#  Internal helpers
+# ═══════════════════════════════════════════════════════════════════════
+
+
+def _write_default_config(path: Path) -> None:
+    """写入默认 config.toml。"""
+    import tomli_w as tw
+
+    config = {
+        "project": {
+            "model": "deepseek-chat",
+            "base_url": "https://api.deepseek.com",
+            "chunk_size": 800,
+            "chunk_overlap": 120,
+            "top_k": 5,
+            "retrieval_candidate_k": 20,
+            "similarity_cutoff": 0.25,
+            "rrf_k": 60,
+            "vector_weight": 0.55,
+            "bm25_weight": 0.45,
+            "max_tokens": 2048,
+            "temperature": 0.2,
+            "context_token_budget": 6000,
+            "max_history_turns": 10,
+            "log_level": "INFO",
+            "parser_engine": "auto",
+            "max_file_size_mb": 20,
+        }
+    }
+    path.write_text("# Co-Thinker Project Configuration\n" + tw.dumps(config), encoding="utf-8")
+
+
+def _prompt_env(env_path: Path, cwd: Path) -> None:
+    """交互式引导创建 .env 文件。"""
+    typer.echo("[WARN] 未检测到 .co-thinker/.env 文件。")
+    if not typer.confirm("  是否现在创建？（需要填入 DeepSeek API Key）", default=True):
+        return
+
+    api_key = typer.prompt("  DeepSeek API Key", hide_input=True)
+    if not api_key:
+        typer.echo("  [SKIP] 跳过，稍后可手动创建 .env")
+        return
+
+    template = f"""# Co-Thinker API Key — 由 `co-thinker init` 自动生成
+DEEPSEEK_API_KEY={api_key}
+"""
+    env_path.write_text(template, encoding="utf-8")
+    typer.echo(f"  [OK] .co-thinker/.env 已创建")
+
+
+def _start_full_stack(web_dir: Path, port: int, api_port: int, cwd: Path, open_browser: bool = True) -> None:
+    """同时启动 FastAPI 后端和 Next.js 前端。"""
+    # 启动 API 服务
+    api_proc = _start_api_process(api_port, cwd)
+
+    # 安装前端依赖并启动
+    typer.echo("[WEB] 检查前端依赖...")
+    node_modules = web_dir / "node_modules"
+    if not node_modules.exists():
+        typer.echo("[WEB] 正在安装前端依赖...")
+        try:
+            subprocess.run(
+                [sys.executable, "-m", "npm", "install"],
+                cwd=str(web_dir),
+                capture_output=True,
+            )
+        except Exception:
+            pass
+        # try npm directly
+        subprocess.run(["npm", "install"], cwd=str(web_dir), capture_output=True)
+
+    typer.echo(f"[WEB] 启动 Next.js (port {port})...")
+    env = os.environ.copy()
+    env["NEXT_PUBLIC_API_URL"] = f"http://localhost:{api_port}"
+
+    web_proc = subprocess.Popen(
+        ["npx", "next", "dev", "--port", str(port)],
+        cwd=str(web_dir),
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+
+    if open_browser:
+        import webbrowser
+        webbrowser.open(f"http://localhost:{port}")
+
+    typer.echo(f"[OK] API: http://localhost:{api_port}  |  Web: http://localhost:{port}")
+    typer.echo("按 Ctrl+C 停止所有服务")
+
+    try:
+        api_proc.wait()
+    except KeyboardInterrupt:
+        typer.echo("\n[EXIT] 关闭中...")
+        api_proc.terminate()
+        web_proc.terminate()
+        try:
+            api_proc.wait(timeout=5)
+            web_proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            api_proc.kill()
+            web_proc.kill()
+        typer.echo("[OK] Co-Thinker 已关闭")
+
+
+def _start_api_only(api_port: int, cwd: Path) -> None:
+    """仅启动 FastAPI API 服务。"""
+    proc = _start_api_process(api_port, cwd)
+    typer.echo(f"[OK] API: http://localhost:{api_port}")
+    typer.echo("按 Ctrl+C 停止服务")
+    try:
+        proc.wait()
+    except KeyboardInterrupt:
+        typer.echo("\n[EXIT] 关闭中...")
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+        typer.echo("[OK] Co-Thinker 已关闭")
+
+
+def _start_api_process(api_port: int, cwd: Path) -> subprocess.Popen:
+    """启动 FastAPI 后端进程。"""
+    typer.echo(f"[API] 启动 FastAPI 服务 (port {api_port})...")
+    env = os.environ.copy()
+    env["CO_THINKER_ROOT"] = str(cwd)
+
+    api_module = "api.server:app"
+    return subprocess.Popen(
+        [
+            sys.executable, "-m", "uvicorn", api_module,
+            "--host", "0.0.0.0",
+            "--port", str(api_port),
+            "--log-level", "info",
+        ],
+        cwd=str(cwd),
+        env=env,
+    )
+
+
+def _fmt_size(size_bytes: int) -> str:
+    if size_bytes < 1024:
+        return f"{size_bytes}B"
+    elif size_bytes < 1024 * 1024:
+        return f"{size_bytes / 1024:.1f}KB"
+    return f"{size_bytes / (1024*1024):.1f}MB"
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  Entry point
+# ═══════════════════════════════════════════════════════════════════════
 
 
 def main() -> None:
