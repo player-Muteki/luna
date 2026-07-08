@@ -51,6 +51,7 @@ def get_project_context(explicit: str | None = None) -> Any:
         vector_store=vectorstore,
     )
     ctx.ingest_engine = ingest
+    ctx.manifest = ingest.manifest
 
     retriever = HybridRetriever(
         config=ctx.config,

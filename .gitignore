@@ -25,5 +25,12 @@ build/
 .vscode/
 .idea/
 
+# Node
+web/node_modules/
+web/.next/
+
+# Virtual env
+.venv/
+
 # OS
 .DS_Store

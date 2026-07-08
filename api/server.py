@@ -20,6 +20,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     from api.deps import get_project_context
     ctx = get_project_context()
     logger.info("Project root: %s", ctx.root)
+
+    # 每次启动清空索引，重新从零开始
+    if ctx.ingest_engine:
+        ctx.ingest_engine.clear_index(clear_manifest=True)
+        logger.info("Index cleared — starting fresh")
+
     logger.info("Chunks: %d", ctx.vectorstore.count_chunks() if ctx.vectorstore else 0)
     yield
     logger.info("Co-Thinker API shutting down.")
