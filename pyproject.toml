@@ -72,7 +72,11 @@ web = [
     "tailwind.config.ts",
     "postcss.config.js",
     "globals.css",
-    ".next/**/*",    # 预编译前端产物（CI 中构建）
+    ".next/build-manifest.json",
+    ".next/server/**/*.js",
+    ".next/server/**/*.json",
+    ".next/static/**/*",
+    ".next/routes-manifest.json",
 ]
 
 

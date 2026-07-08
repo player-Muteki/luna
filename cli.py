@@ -348,11 +348,16 @@ def _start_full_stack(web_dir: Path, port: int, api_port: int, cwd: Path, open_b
         typer.echo(f"[WEB] 启动 Next.js 开发服务器 (port {port})...")
         mode_cmd = ["npx", "next", "dev", "--port", str(port)]
 
+    # 确保 npx 可用
+    npx_cmd = "npx"
+    if os.name == "nt":
+        npx_cmd = "npx.cmd"
+
     env = os.environ.copy()
     env["NEXT_PUBLIC_API_URL"] = f"http://localhost:{api_port}"
 
     web_proc = subprocess.Popen(
-        mode_cmd,
+        [npx_cmd, "next", "dev", "--port", str(port)],
         cwd=str(web_dir),
         env=env,
     )
@@ -398,7 +403,22 @@ def _start_api_only(api_port: int, cwd: Path) -> None:
 
 
 def _check_npm() -> bool:
-    """检查 npm 是否可用。"""
+    """检查 npm 是否可用（支持 nvm 等自定义路径）。"""
+    # 尝试常见的 node 安装路径
+    node_candidates = [
+        "/opt/homebrew/bin",
+        "/usr/local/bin",
+        os.path.expanduser("~/.nvm/versions/node/*/bin"),
+    ]
+    for candidate in node_candidates:
+        if "*" in candidate:
+            import glob
+            matches = glob.glob(candidate)
+            if matches:
+                os.environ.setdefault("PATH", f"{matches[-1]}:{os.environ.get('PATH', '')}")
+        else:
+            os.environ.setdefault("PATH", f"{candidate}:{os.environ.get('PATH', '')}")
+
     try:
         result = subprocess.run(
             ["npm", "--version"],
