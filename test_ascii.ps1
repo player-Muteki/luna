@@ -1,11 +1,12 @@
-# Co-Thinker install script (Windows PowerShell)
-# Downloads the latest .whl from GitHub and installs to a dedicated venv.
+# Co-Thinker Windows PowerShell
+#  GitHub  .whl 
+#  co-thinker 
 #
-# Usage:
+# :
 #   powershell -ExecutionPolicy Bypass -File install.ps1
 #   powershell -ExecutionPolicy Bypass -File install.ps1 co_thinker-0.0.5-py3-none-any.whl
-# Online (no download):
-#   powershell -ExecutionPolicy Bypass -c "curl.exe -sSL URL | ..."
+# :
+#   powershell -ExecutionPolicy Bypass -c "curl.exe -sSL https://.../install.ps1 | iex"
 
 $WheelPath = if ($args) { $args[0] } else { "" }
 
@@ -17,51 +18,51 @@ function Write-Error($msg){ Write-Host "[ERROR] $msg" -ForegroundColor Red }
 Write-Host ""
 Write-Host "  ____          _   _   _           _"
 Write-Host " / ___|___   __| | | |_| |__  _ __ | | _____ _ __"
-Write-Host "| |   / _ \ / _' | | __| '_ \| '_ \| |/ / _ \ '__|"
+Write-Host "| |   / _ \ / _` | | __| '_ \| '_ \| |/ / _ \ '__|"
 Write-Host "| |__| (_) | (_| | | |_| | | | | |   <  __/ |"
 Write-Host " \____\___/ \__,_|  \__|_| |_|_| |_|_|\_\___|_|"
 Write-Host ""
-Write-Host "  Co-Thinker v0.0.5 - Windows Installer"
+Write-Host "  Co-Thinker v0.0.5 - Windows "
 
-# ── Handle local .whl or auto-download ─────────────────────
+#   .whl  
 if ($WheelPath -and (Test-Path $WheelPath)) {
     $WheelFile = Resolve-Path $WheelPath
-    Write-Info "Using local file: $WheelFile"
+    Write-Info ": $WheelFile"
 } else {
-    Write-Step "Fetching latest release from GitHub"
+    Write-Step " GitHub "
     $Repo = "player-Muteki/co-thinker"
-    Write-Info "Repo: $Repo"
+    Write-Info ": $Repo"
 
     $ApiUrl = "https://api.github.com/repos/$Repo/releases/latest"
     try {
         $ReleaseData = Invoke-RestMethod -Uri $ApiUrl -Headers @{ "Accept" = "application/json" }
     } catch {
-        Write-Error "Failed to fetch release info: $_"
+        Write-Error " Release : $_"
         exit 1
     }
 
     $Asset = $ReleaseData.assets | Where-Object { $_.name -like "*.whl" } | Select-Object -First 1
     if (-not $Asset) {
-        Write-Error "No .whl file found in latest release"
+        Write-Error " .whl "
         exit 1
     }
 
     $WheelUrl = $Asset.browser_download_url
     $WheelName = Split-Path $WheelUrl -Leaf
     $WheelFile = Join-Path $env:TEMP $WheelName
-    Write-Info "Downloading: $WheelName"
+    Write-Info ": $WheelName"
 
     try {
         Invoke-WebRequest -Uri $WheelUrl -OutFile $WheelFile -UseBasicParsing
     } catch {
-        Write-Error "Download failed: $_"
+        Write-Error ": $_"
         exit 1
     }
-    Write-Info "Download complete"
+    Write-Info ""
 }
 
-# ── 1. Check Python ────────────────────────────────────────
-Write-Step "Checking Python"
+#  1.  Python 
+Write-Step " Python"
 $Python = $null
 foreach ($cmd in @("python3", "python")) {
     try {
@@ -74,16 +75,16 @@ foreach ($cmd in @("python3", "python")) {
     } catch {}
 }
 if (-not $Python) {
-    Write-Error "Requires Python >= 3.10"
+    Write-Error " Python >= 3.10"
     exit 1
 }
 
-# ── 2. Install to dedicated venv ───────────────────────────
-Write-Step "Installing Co-Thinker"
+#  2.  
+Write-Step " Co-Thinker"
 
 $VenDir = Join-Path $env:USERPROFILE ".co-thinker"
 if (Test-Path $VenDir) {
-    Write-Warn "$VenDir exists, reinstalling"
+    Write-Warn " $VenDir"
     Remove-Item -Recurse -Force $VenDir
 }
 
@@ -91,13 +92,13 @@ if (Test-Path $VenDir) {
 $Pip = Join-Path $VenDir "Scripts\pip.exe"
 & $Pip install $WheelFile --quiet
 if ($LASTEXITCODE -ne 0) {
-    Write-Error "Installation failed"
+    Write-Error ""
     exit 1
 }
-Write-Info "Installed to $VenDir"
+Write-Info " $VenDir"
 
-# ── 3. Create PATH shortcut ──────────────────────────────
-Write-Step "Configuring system PATH"
+#  3.  PATH  
+Write-Step ""
 
 $BinDir = Join-Path $env:USERPROFILE ".local\bin"
 if (-not (Test-Path $BinDir)) {
@@ -106,29 +107,30 @@ if (-not (Test-Path $BinDir)) {
 
 $BatPath = Join-Path $BinDir "co-thinker.cmd"
 $CoThinkerExe = Join-Path $VenDir "Scripts\co-thinker.exe"
-"@echo off`r`n`"$CoThinkerExe`" %*" | Set-Content -Path $BatPath
-Write-Info "Created shortcut: $BatPath"
+$batContent = "@echo off`r`n`"$CoThinkerExe`" %*"
+$batContent | Set-Content -Path $BatPath
+Write-Info ": $BatPath"
 
-# ── 4. Check PATH ──────────────────────────────────────────
-Write-Step "Checking PATH"
+#  4.  PATH 
+Write-Step " PATH"
 $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
 if ($UserPath -notlike "*$BinDir*") {
-    Write-Warn "$BinDir not in PATH"
+    Write-Warn "$BinDir  PATH "
     Write-Host ""
-    Write-Host "  Auto-adding to user environment variable PATH..."
+    Write-Host "   PATH..."
     $newPath = $UserPath + ";" + $BinDir
     [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
-    Write-Info "Added. Restart your terminal for co-thinker to be available"
+    Write-Info " co-thinker "
 } else {
-    Write-Info "PATH already contains $BinDir"
+    Write-Info "PATH  $BinDir"
 }
 
-# ── Done ─────────────────────────────────────────────────────
-Write-Step "Installation complete!"
+#   
+Write-Step ""
 Write-Host ""
-Write-Host "  To get started:"
+Write-Host "  "
 Write-Host ""
 Write-Host "    mkdir my-kb && cd my-kb"
-Write-Host "    co-thinker init"
-Write-Host "    co-thinker start"
+Write-Host "    co-thinker init       #  .env "
+Write-Host "    co-thinker start      #  Web "
 Write-Host ""
