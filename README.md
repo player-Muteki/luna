@@ -42,7 +42,9 @@ bash <(curl -sSL 'https://raw.githubusercontent.com/player-Muteki/co-thinker/ref
 curl -sSL -o /tmp/co-thinker-install.sh 'https://raw.githubusercontent.com/player-Muteki/co-thinker/refs/heads/main/install.sh' && bash /tmp/co-thinker-install.sh
 ```
 
-**如果遇到 429 限流**，试用以下备选方案：
+### 如果遇到 429 限流
+
+以下备选方案适用于 Linux 和 macOS：
 
 **方案一（通过 GitHub API 获取脚本）：**
 ```bash
