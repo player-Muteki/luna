@@ -375,15 +375,14 @@ def _start_full_stack(web_dir: Path, port: int, api_port: int, cwd: Path, open_b
         ["npx", "next", "dev", "--port", str(port)],
         cwd=str(web_dir),
         env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
     )
 
     if open_browser:
         import webbrowser
         webbrowser.open(f"http://localhost:{port}")
 
-    typer.echo(f"[OK] API: http://localhost:{api_port}  |  Web: http://localhost:{port}")
+    typer.echo(f"[OK] API: http://localhost:{api_port}")
+    typer.echo(f"[OK] Web: http://localhost:{port}")
     typer.echo("按 Ctrl+C 停止所有服务")
 
     try:
