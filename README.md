@@ -33,12 +33,6 @@ curl -sSL https://api.github.com/repos/player-Muteki/co-thinker/contents/install
 > macOS 默认的 bash 3.2 对 Unicode 支持有限，请使用以下命令（通过 `refs/heads/main` 路径绕过 CDN 缓存）：
 
 ```bash
-bash <(curl -sSL 'https://raw.githubusercontent.com/player-Muteki/co-thinker/refs/heads/main/install.sh')
-```
-
-或先下载再执行：
-
-```bash
 curl -sSL -o /tmp/co-thinker-install.sh 'https://raw.githubusercontent.com/player-Muteki/co-thinker/refs/heads/main/install.sh' && bash /tmp/co-thinker-install.sh
 ```
 
