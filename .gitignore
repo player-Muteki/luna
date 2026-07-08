@@ -3,9 +3,6 @@
 
 # Co-Thinker (旧版)
 .env
-data/
-vectorstore/
-storage/
 
 # Python
 __pycache__/
