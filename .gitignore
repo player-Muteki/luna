@@ -15,9 +15,6 @@ __pycache__/
 dist/
 build/
 
-# Virtual environment
-.venv/
-
 # Co-Thinker
 .deepseek/
 
@@ -28,9 +25,6 @@ build/
 # Node
 web/node_modules/
 web/.next/
-
-# Virtual env
-.venv/
 
 # OS
 .DS_Store
