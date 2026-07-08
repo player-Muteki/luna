@@ -137,14 +137,13 @@ def init(
 
     co_dir = cwd / ".co-thinker"
     vectordb_dir = co_dir / "vectordb"
-    config_path = co_dir / "config.toml"
-    env_path = co_dir / ".env"
+    config_path = co_dir / ".config.toml"
 
     co_dir.mkdir(parents=True, exist_ok=True)
     vectordb_dir.mkdir(parents=True, exist_ok=True)
     typer.echo(f"[OK] 已创建: {co_dir}/")
 
-    # 创建默认 config.toml
+    # 创建默认项目配置
     if not config_path.exists():
         try:
             import tomli_w
@@ -162,11 +161,23 @@ def init(
     else:
         typer.echo(f"[OK] 已存在: {config_path}")
 
-    # 创建 .env（如果需要）
-    if not env_path.exists():
-        _prompt_env(env_path, cwd)
+    # 检查全局配置 ~/.co-thinkerc
+    from core.project import GLOBAL_CONFIG_PATH, _load_global_config
+
+    if not GLOBAL_CONFIG_PATH.exists():
+        typer.echo("")
+        typer.echo("[WARN] 未检测到全局配置 ~/.co-thinkerc")
+        if typer.confirm("  是否现在创建？（需要填入 DeepSeek API Key）", default=True):
+            api_key = typer.prompt("  DeepSeek API Key", hide_input=True)
+            if api_key:
+                _write_global_config(api_key)
+                typer.echo(f"  [OK] 已创建: {GLOBAL_CONFIG_PATH}")
+            else:
+                typer.echo("  [SKIP] 跳过，可稍后手动创建")
+        else:
+            typer.echo("  [SKIP] 跳过，可稍后手动创建")
     else:
-        typer.echo(f"[OK] 已存在: {env_path}")
+        typer.echo(f"[OK] 已存在: {GLOBAL_CONFIG_PATH}")
 
     typer.echo("")
     typer.echo("[DONE] 初始化完成！运行 co-thinker start 启动 Web 界面。")
@@ -193,10 +204,7 @@ def start(
         init(dir=cwd)
         typer.echo("")
 
-    # 加载 .co-thinker/.env
-    env_path = co_dir / ".env"
-    if env_path.exists():
-        os.environ.setdefault("CO_THINKER_ROOT", str(cwd))
+    os.environ.setdefault("CO_THINKER_ROOT", str(cwd))
 
     web_dir = Path(__file__).resolve().parent / "web"
 
@@ -328,22 +336,21 @@ def _write_default_config(path: Path) -> None:
     path.write_text("# Co-Thinker Project Configuration\n" + tw.dumps(config), encoding="utf-8")
 
 
-def _prompt_env(env_path: Path, cwd: Path) -> None:
-    """交互式引导创建 .env 文件。"""
-    typer.echo("[WARN] 未检测到 .co-thinker/.env 文件。")
-    if not typer.confirm("  是否现在创建？（需要填入 DeepSeek API Key）", default=True):
-        return
+def _write_global_config(api_key: str) -> None:
+    """创建 ~/.co-thinkerc 全局配置文件。"""
+    import tomli_w
 
-    api_key = typer.prompt("  DeepSeek API Key", hide_input=True)
-    if not api_key:
-        typer.echo("  [SKIP] 跳过，稍后可手动创建 .env")
-        return
-
-    template = f"""# Co-Thinker API Key — 由 `co-thinker init` 自动生成
-DEEPSEEK_API_KEY={api_key}
-"""
-    env_path.write_text(template, encoding="utf-8")
-    typer.echo(f"  [OK] .co-thinker/.env 已创建")
+    config = {
+        "auth": {
+            "api_key": api_key,
+        },
+        "model": {
+            "name": "deepseek-chat",
+            "base_url": "https://api.deepseek.com",
+        },
+    }
+    path = Path.home() / ".co-thinkerc"
+    path.write_text("# Co-Thinker Global Configuration\n" + tomli_w.dumps(config), encoding="utf-8")
 
 
 def _start_full_stack(web_dir: Path, port: int, api_port: int, cwd: Path, open_browser: bool = True) -> None:

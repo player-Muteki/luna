@@ -79,9 +79,12 @@ def get_project_context(explicit: str | None = None) -> Any:
 
 
 def _get_api_key(ctx: Any) -> str:
-    """读取 API Key."""
+    """读取 API Key。优先级：进程环境变量 > ~/.co-thinkerc > .co-thinker/.env（兼容旧版）。"""
+    from core.project import _global_auth_api_key
     import os, re
     key = os.getenv("DEEPSEEK_API_KEY", "")
+    if not key:
+        key = _global_auth_api_key()
     if not key and ctx.env_path.exists():
         m = re.search(r'^DEEPSEEK_API_KEY=(.+)$', ctx.env_path.read_text(encoding="utf-8"), re.MULTILINE)
         if m:

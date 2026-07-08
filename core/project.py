@@ -2,6 +2,14 @@
 ProjectContext — Co-Thinker 与工作目录的绑定桩。
 
 每个进程绑定到一个 CWD，通过它访问所有资源。
+
+全局配置 (~/.co-thinkerc)：
+  [auth]
+  api_key = "sk-..."
+
+  [model]
+  name = "deepseek-chat"
+  base_url = "https://api.deepseek.com"
 """
 
 from __future__ import annotations
@@ -14,10 +22,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-try:
-    from dotenv import load_dotenv
-except ImportError:
-    load_dotenv = None
+GLOBAL_CONFIG_PATH = Path.home() / ".co-thinkerc"
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +41,44 @@ def _default_supported_extensions() -> list[str]:
         ".csv", ".sql", ".log",
         ".pdf", ".docx", ".pptx",
     ]
+
+
+def _load_global_config() -> dict[str, Any]:
+    """读取 ~/.co-thinkerc 全局配置（不存在则返回空字典）。"""
+    path = GLOBAL_CONFIG_PATH
+    if not path.exists():
+        return {}
+    raw = path.read_text(encoding="utf-8")
+    if not raw.strip():
+        return {}
+    try:
+        import tomli
+    except ImportError:
+        try:
+            import tomllib as tomli  # type: ignore[no-redef]
+        except ImportError:
+            return {}
+    try:
+        return tomli.loads(raw)
+    except Exception:
+        logger.warning("Failed to parse %s", path)
+        return {}
+
+
+def _global_auth_api_key() -> str:
+    """从 ~/.co-thinkerc 读取 API Key。"""
+    cfg = _load_global_config()
+    return cfg.get("auth", {}).get("api_key", "")
+
+
+def _global_model_name() -> str:
+    cfg = _load_global_config()
+    return cfg.get("model", {}).get("name", "")
+
+
+def _global_model_base_url() -> str:
+    cfg = _load_global_config()
+    return cfg.get("model", {}).get("base_url", "")
 
 
 @dataclass
@@ -66,37 +109,57 @@ class ProjectConfig:
 
     @classmethod
     def load(cls, path: Path) -> "ProjectConfig":
-        """从 TOML 文件加载配置，若文件不存在则返回默认配置。"""
-        if not path.exists():
-            return cls()
+        """从项目 .co-thinker/.config.toml 加载配置，合并全局 ~/.co-thinkerc。
 
-        raw = path.read_text(encoding="utf-8")
-        if not raw.strip():
-            return cls()
-
-        try:
-            import tomli
-        except ImportError:
-            tomli = None
-
-        if tomli is None:
-            try:
-                import tomllib as tomli  # type: ignore[no-redef]
-            except ImportError:
-                raise RuntimeError("需要 tomli 或 Python 3.11+ 来读取 TOML 配置")
-
-        data = tomli.loads(raw)
-
+        优先级（后者覆盖前者）：
+          1. 默认值
+          2. 全局 ~/.co-thinkerc 的 [project] 段
+          3. 项目 .co-thinker/.config.toml 的 [project] 段
+        """
         known_keys = set(cls.__dataclass_fields__.keys())
+
+        # 从全局配置加载 [project] 段
+        global_cfg = _load_global_config()
+        global_project = global_cfg.get("project", {})
+
+        # 从项目配置加载 [project] 段
+        local_project: dict[str, Any] = {}
+        if path.exists():
+            raw = path.read_text(encoding="utf-8")
+            if raw.strip():
+                try:
+                    import tomli
+                except ImportError:
+                    try:
+                        import tomllib as tomli  # type: ignore[no-redef]
+                    except ImportError:
+                        raise RuntimeError("需要 tomli 或 Python 3.11+ 来读取 TOML 配置")
+                data = tomli.loads(raw)
+                if "project" in data:
+                    for key, value in data["project"].items():
+                        if key in known_keys:
+                            local_project[key] = value
+                        else:
+                            logger.warning("Unknown config key [project].%s, ignoring", key)
+
+        # 合并：默认值 ← 全局 ← 本地项目
         config_data = {}
-        if "project" in data:
-            for key, value in data["project"].items():
-                if key in known_keys:
-                    config_data[key] = value
-                else:
-                    logger.warning("Unknown config key [project].%s, ignoring", key)
+        for key in known_keys:
+            if key in local_project:
+                config_data[key] = local_project[key]
+            elif key in global_project:
+                config_data[key] = global_project[key]
+            # 其余保持默认值
 
         return cls(**config_data)
+
+    def merge_global_overrides(self) -> None:
+        """用全局配置中 [project] 段覆盖当前实例的字段（仅当字段值为默认值且全局有值）。"""
+        global_cfg = _load_global_config()
+        global_project = global_cfg.get("project", {})
+        for key, value in global_project.items():
+            if hasattr(self, key) and getattr(self, key) == self.__dataclass_fields__[key].default:
+                setattr(self, key, value)
 
     def save(self, path: Path) -> None:
         """将配置保存为 TOML 文件。"""
@@ -130,7 +193,6 @@ class ProjectContext:
         self.sessions_path = self.co_dir / "sessions.jsonl"
 
         self.config = ProjectConfig.load(self.config_path)
-        self._load_env()
 
         # 各种引擎（由外部工厂组装后设置）
         self.vectorstore: Any | None = None
@@ -162,11 +224,6 @@ class ProjectContext:
         """确保 .co-thinker/ 及子目录存在。"""
         self.co_dir.mkdir(parents=True, exist_ok=True)
         self.vectordb_dir.mkdir(parents=True, exist_ok=True)
-
-    def _load_env(self) -> None:
-        """从 .co-thinker/.env 加载环境变量（如果有）。"""
-        if self.env_path.exists() and load_dotenv is not None:
-            load_dotenv(dotenv_path=self.env_path, override=False)
 
     def save_config(self) -> None:
         """持久化当前配置。"""
@@ -271,8 +328,10 @@ class ProjectContext:
 
 
 def get_api_key(ctx: ProjectContext) -> str:
-    """从环境变量获取 API Key，优先级：进程环境变量 > .co-thinker/.env。"""
+    """获取 API Key，优先级：进程环境变量 > ~/.co-thinkerc > .co-thinker/.env（兼容旧版）。"""
     key = os.getenv("DEEPSEEK_API_KEY", "")
+    if not key:
+        key = _global_auth_api_key()
     if not key:
         if ctx.env_path.exists():
             m = _re.search(r'^DEEPSEEK_API_KEY=(.+)$', ctx.env_path.read_text(encoding="utf-8"), _re.MULTILINE)
@@ -282,15 +341,16 @@ def get_api_key(ctx: ProjectContext) -> str:
 
 
 def get_llm(ctx: ProjectContext) -> Any:
-    """创建 OpenAI 兼容客户端。"""
+    """创建 OpenAI 兼容客户端。base_url 优先级：全局 ~/.co-thinkerc > 项目配置 > 默认值。"""
     api_key = get_api_key(ctx)
     if not api_key:
         raise ValueError("DEEPSEEK_API_KEY 未设置")
+    base_url = _global_model_base_url() or ctx.config.base_url
     try:
         from openai import OpenAI
     except ImportError:
         raise RuntimeError("openai 包未安装")
-    return OpenAI(api_key=api_key, base_url=ctx.config.base_url)
+    return OpenAI(api_key=api_key, base_url=base_url)
 
 
 def get_embedding_model(ctx: ProjectContext) -> Any | None:
