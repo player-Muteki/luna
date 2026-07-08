@@ -27,19 +27,17 @@ elif [[ $# -eq 0 ]]; then
     step "Fetching latest release from GitHub"
     info "Repo: $REPO"
     API_URL="https://api.github.com/repos/$REPO/releases/latest"
+    # 尝试从 GitHub API 获取 release（短超时，失败则走源码安装）
+    WHEEL_URL=""
     if command -v curl &>/dev/null; then
-        RELEASE_DATA=$(curl -s --max-time 10 "$API_URL")
-    elif command -v wget &>/dev/null; then
-        RELEASE_DATA=$(wget -q --timeout=10 -O- "$API_URL")
-    else
-        error "curl or wget required"
-        exit 1
+        RELEASE_DATA=$(curl -s --max-time 5 "$API_URL" 2>/dev/null || echo "")
+        HAS_RELEASE=$(echo "$RELEASE_DATA" | grep -c '"tag_name"' 2>/dev/null || echo "0")
+        if [[ "$HAS_RELEASE" -gt 0 ]]; then
+            WHEEL_URL=$(echo "$RELEASE_DATA" | grep -oE 'https://[^"\\]+\.whl' | head -1)
+        fi
     fi
 
-    # 检查 API 是否返回了有效的 release 数据（被限流时返回的 JSON 不含 assets）
-    HAS_RELEASE=$(echo "$RELEASE_DATA" | grep -c '"tag_name"' || true)
-    WHEEL_URL=$(echo "$RELEASE_DATA" | grep -oE 'https://[^"\\]+\.whl' | head -1)
-    if [[ -n "$WHEEL_URL" && "$HAS_RELEASE" -gt 0 ]]; then
+    if [[ -n "$WHEEL_URL" ]]; then
         WHEEL_NAME=$(basename "$WHEEL_URL")
         info "Downloading: $WHEEL_NAME"
         if command -v curl &>/dev/null; then
@@ -53,7 +51,6 @@ elif [[ $# -eq 0 ]]; then
         warn "No .whl release found, installing from source"
         TMP_DIR=$(mktemp -d)
         if command -v git &>/dev/null; then
-            git clone --depth 1 "$REPO" "$TMP_DIR" --quiet 2>/dev/null || \
             git clone --depth 1 "https://github.com/$REPO.git" "$TMP_DIR" --quiet
         else
             ZIP_URL="https://github.com/$REPO/archive/refs/heads/main.zip"
