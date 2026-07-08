@@ -55,8 +55,23 @@ version = {attr = "__version__.__version__"}
 
 [tool.setuptools]
 py-modules = ["cli", "config", "__version__"]
-packages = ["core", "api", "api.routes", "app"]
+packages = ["core", "api", "api.routes", "app", "web"]
 
 [tool.setuptools.package-data]
-# 不包含 data/（用户自己的知识库）、vectorstore/、storage/（运行时生成）
-# wheel 只包含 Python 代码
+web = [
+    "__init__.py",
+    "app/**/*",
+    "components/**/*",
+    "lib/**/*",
+    "public/**/*",
+    "package.json",
+    "package-lock.json",
+    "next.config.js",
+    "next-env.d.ts",
+    "tsconfig.json",
+    "tailwind.config.ts",
+    "postcss.config.js",
+    "globals.css",
+]
+
+
