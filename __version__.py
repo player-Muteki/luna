@@ -1,5 +1,5 @@
 """Single source of truth for the Co-Thinker version."""
 
-__version__ = "0.0.7"
+__version__ = "0.0.9"
 
 __all__ = ("__version__",)
