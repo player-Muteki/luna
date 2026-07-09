@@ -3,17 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import FileTree from "@/components/files/FileTree";
 import { RefreshCw, CheckSquare, Square, Search, Database } from "lucide-react";
-
-interface FileItem {
-  path: string;
-  name: string;
-  ext: string;
-  size: number;
-  mtime: number;
-  is_dir: boolean;
-  is_indexed: boolean;
-  document_id: string;
-}
+import { getFiles, ingestFiles, type FileItem } from "@/lib/api";
 
 export default function FilesPage() {
   const [files, setFiles] = useState<FileItem[]>([]);
@@ -26,21 +16,19 @@ export default function FilesPage() {
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(timer);
-  }, [debouncedSearch]);
+  }, [search]);
 
   const loadFiles = useCallback(async () => {
     setLoading(true);
     try {
-      const params = debouncedSearch ? `?search=${encodeURIComponent(debouncedSearch)}` : "";
-      const res = await fetch(`/api/files${params}`);
-      const data = await res.json();
+      const data = await getFiles({ search: debouncedSearch || undefined });
       setFiles(data.files || []);
     } catch (e) {
       console.error("Failed to load files", e);
     } finally {
       setLoading(false);
     }
-  }, [search]);
+  }, [debouncedSearch]);
 
   useEffect(() => {
     loadFiles();
@@ -68,11 +56,7 @@ export default function FilesPage() {
     if (selected.size === 0) return;
     setIndexing(true);
     try {
-      await fetch("/api/ingest", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paths: Array.from(selected) }),
-      });
+      await ingestFiles(Array.from(selected));
       await loadFiles();
       setSelected(new Set());
       window.dispatchEvent(new CustomEvent("index-updated"));

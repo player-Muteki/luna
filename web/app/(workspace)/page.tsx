@@ -3,30 +3,17 @@
 import { useEffect, useState } from "react";
 import { Files, MessageSquare, Database, Layers3 } from "lucide-react";
 import Link from "next/link";
-
-interface ProjectInfo {
-  root: string;
-  name: string;
-  config: Record<string, unknown>;
-  stats: {
-    document_count?: number;
-    indexed_count?: number;
-    chunk_count?: number;
-  };
-}
+import { getProjectInfo, type ProjectInfo } from "@/lib/api";
 
 export default function WorkspaceHome() {
   const [info, setInfo] = useState<ProjectInfo | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/project")
-      .then((res) => res.json())
-      .then((data) => {
-        setInfo(data);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+    getProjectInfo()
+      .then(setInfo)
+      .catch(() => setLoading(false))
+      .finally(() => setLoading(false));
   }, []);
 
   return (

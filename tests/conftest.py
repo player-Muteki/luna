@@ -1,15 +1,13 @@
 from __future__ import annotations
 
 import io
-from collections.abc import Iterator
-from pathlib import Path
 from typing import Any
 
 import pytest
 
-from app.ingest import IngestionEngine
-from app.retriever import HybridRetriever
-from config import ensure_directories, load_settings
+from core.ingest import IngestionEngine
+from core.project import ProjectConfig
+from core.retriever import HybridRetriever
 
 
 # ── Fake embedding model ──────────────────────────────────────────
@@ -128,47 +126,53 @@ class StreamingLLM:
 
 # ── Test helpers ──────────────────────────────────────────────────
 
-def make_settings(tmp_path: Path, **overrides: Any) -> Any:
-    """Create a Settings instance with sensible test defaults."""
-    defaults: dict[str, Any] = {
-        "data_dir": tmp_path / "data",
-        "vectorstore_dir": tmp_path / "vectorstore",
-        "storage_dir": tmp_path / "storage",
-        "chunk_size": 400,
-        "chunk_overlap": 20,
-        "top_k": 5,
-        "retrieval_candidate_k": 10,
-        "similarity_cutoff": 0.0,
-        "deepseek_api_key": "sk-test-key",
-    }
-    defaults.update(overrides)
-    settings = load_settings(overrides=defaults)
-    ensure_directories(settings)
-    return settings
+def make_project_config(tmp_path: Path, **overrides: Any) -> ProjectConfig:
+    """Create a ProjectConfig in a temp directory with sensible test defaults.
+
+    Sets up a minimal .co-thinker/vectordb/ structure so core module engines
+    can operate.  Files should be written directly under *tmp_path*.
+    """
+    co_dir = tmp_path / ".co-thinker"
+    (co_dir / "vectordb").mkdir(parents=True, exist_ok=True)
+
+    config = ProjectConfig.load(co_dir / "config.toml")
+    config.chunk_size = 400
+    config.chunk_overlap = 20
+    config.top_k = 5
+    config.retrieval_candidate_k = 10
+    config.similarity_cutoff = 0.0
+    for key, value in overrides.items():
+        if hasattr(config, key):
+            setattr(config, key, value)
+    return config
 
 
 def build_retrieval_results(
     tmp_path: Path,
     query: str = "retrieval",
-) -> tuple[Any, Any]:
-    """Ingest two test documents and return (settings, retrieval_results)."""
-    settings = make_settings(tmp_path)
-    embedding_model = FakeEmbeddingModel()
-    engine = IngestionEngine(settings, embedding_model=embedding_model)
+) -> tuple[ProjectConfig, Any]:
+    """Ingest two test documents under *tmp_path* and return (config, retrieval_results).
 
-    (settings.data_dir / "retrieval.md").write_text(
+    Uses ``core.ingest.IngestionEngine`` and ``core.retriever.HybridRetriever``
+    so the test seam matches production.
+    """
+    config = make_project_config(tmp_path)
+    embedding_model = FakeEmbeddingModel()
+    engine = IngestionEngine(config=config, root=tmp_path, embedding_model=embedding_model)
+
+    (tmp_path / "retrieval.md").write_text(
         "Hybrid retrieval combines vector retrieval with BM25 for better recall.",
         encoding="utf-8",
     )
-    (settings.data_dir / "generator.md").write_text(
+    (tmp_path / "generator.md").write_text(
         "The generator builds answers from retrieved context and cites sources.",
         encoding="utf-8",
     )
 
     engine.add_files(engine.scan_files())
-    retriever = HybridRetriever(settings, engine.vector_store, embedding_model=embedding_model)
+    retriever = HybridRetriever(config=config, vector_store=engine.vector_store, embedding_model=embedding_model)
     results = retriever.retrieve(query, mode="hybrid")
-    return settings, results
+    return config, results
 
 
 # ── Document parsing fixtures ─────────────────────────────────────
@@ -200,11 +204,8 @@ def make_pptx_bytes(text: str = "Hello, PPTX!") -> bytes:
     from pptx.util import Inches
 
     prs = Presentation()
-    slide = prs.slides.add_slide(prs.slide_layouts[6])
-    left = top = Inches(1)
-    txBox = slide.shapes.add_textbox(left, top, Inches(6), Inches(1))
-    tf = txBox.text_frame
-    tf.text = text
+    slide = prs.slides.add_slide(prs.slide_layouts[5])  # blank
+    slide.shapes.add_textbox(Inches(1), Inches(1), Inches(8), Inches(2)).text_frame.text = text
     buf = io.BytesIO()
     prs.save(buf)
     return buf.getvalue()

@@ -12,6 +12,7 @@ import {
   Trash2,
   Database,
 } from "lucide-react";
+import { getProjectInfo, sessions as sessionsApi, type ProjectInfo } from "@/lib/api";
 
 interface Session {
   id: string;
@@ -19,11 +20,6 @@ interface Session {
   message_count: number;
   is_current: boolean;
   updated_at: string;
-}
-
-interface ProjectInfo {
-  name: string;
-  stats: { indexed_count?: number; chunk_count?: number };
 }
 
 export default function ProjectSidebar({
@@ -41,23 +37,17 @@ export default function ProjectSidebar({
   // Fetch project info and sessions on mount only — index-updated event
   // handles refreshes after indexing operations.
   useEffect(() => {
-    fetch("/api/project")
-      .then((r) => r.json())
-      .then(setInfo)
-      .catch(() => {});
+    getProjectInfo().then(setInfo).catch(() => {});
   }, []);
 
   useEffect(() => {
-    fetch("/api/sessions")
-      .then((r) => r.json())
-      .then((d) => setSessions(d.sessions || []))
-      .catch(() => {});
+    sessionsApi.list().then((d) => setSessions(d.sessions)).catch(() => {});
   }, []);
 
   // 监听索引更新事件，自动刷新统计
   useEffect(() => {
     const handler = () => {
-      fetch("/api/project").then(r => r.json()).then(setInfo).catch(() => {});
+      getProjectInfo().then(setInfo).catch(() => {});
     };
     window.addEventListener("index-updated", handler);
     return () => window.removeEventListener("index-updated", handler);
@@ -65,12 +55,7 @@ export default function ProjectSidebar({
 
   const createSession = async () => {
     try {
-      const res = await fetch("/api/sessions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-      });
-      const data = await res.json();
+      const data = await sessionsApi.create();
       router.push(`/chat/${data.id}`);
     } catch (e) {
       console.error(e);
@@ -80,7 +65,7 @@ export default function ProjectSidebar({
   const deleteSession = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      await fetch(`/api/sessions/${id}`, { method: "DELETE" });
+      await sessionsApi.delete(id);
       setSessions((prev) => prev.filter((s) => s.id !== id));
       if (pathname.includes(id)) {
         router.push("/chat");

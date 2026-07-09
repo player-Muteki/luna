@@ -1,35 +1,32 @@
 from __future__ import annotations
 
-from pathlib import Path
+from core.ingest import IngestionEngine
+from core.retriever import HybridRetriever
 
-from app.ingest import IngestionEngine
-from app.retriever import HybridRetriever
-from config import ensure_directories, load_settings
-
-from .conftest import FakeEmbeddingModel, make_settings
+from .conftest import FakeEmbeddingModel, make_project_config
 
 
 def build_engine_and_retriever(tmp_path: Path):
-    settings = make_settings(tmp_path)
+    config = make_project_config(tmp_path)
     embedding_model = FakeEmbeddingModel()
-    engine = IngestionEngine(settings, embedding_model=embedding_model)
+    engine = IngestionEngine(config=config, root=tmp_path, embedding_model=embedding_model)
 
-    (settings.data_dir / "retrieval.md").write_text(
+    (tmp_path / "retrieval.md").write_text(
         "Hybrid retrieval combines vector retrieval with BM25 for better recall.",
         encoding="utf-8",
     )
-    (settings.data_dir / "generator.md").write_text(
+    (tmp_path / "generator.md").write_text(
         "The generator builds answers from retrieved context and cites sources.",
         encoding="utf-8",
     )
-    (settings.data_dir / "config.txt").write_text(
+    (tmp_path / "config.txt").write_text(
         "TOP_K controls how many retrieved chunks are passed into the prompt.",
         encoding="utf-8",
     )
 
     engine.add_files(engine.scan_files())
-    retriever = HybridRetriever(settings, engine.vector_store, embedding_model=embedding_model)
-    return settings, engine, retriever
+    retriever = HybridRetriever(config=config, vector_store=engine.vector_store, embedding_model=embedding_model)
+    return config, engine, retriever
 
 
 def test_vector_retrieve_returns_semantic_match(tmp_path: Path) -> None:

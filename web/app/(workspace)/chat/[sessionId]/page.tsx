@@ -2,143 +2,127 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import ChatMessages, { type Message, type RetrievalDetails } from "@/components/chat/ChatMessages";
+import ChatMessages, { type Message } from "@/components/chat/ChatMessages";
 import ChatComposer from "@/components/chat/ChatComposer";
 import { MessageSquare, Wifi, WifiOff } from "lucide-react";
-
-interface SessionData {
-  id: string;
-  title: string;
-  messages: Message[];
-}
+import { ChatStream, type ConnectionStatus, type RetrievalDetails } from "@/lib/chat-stream";
+import { sessions, type SessionDetail } from "@/lib/api";
 
 export default function ChatSessionPage() {
   const params = useParams();
   const router = useRouter();
   const sessionId = params.sessionId as string;
-  const [session, setSession] = useState<SessionData | null>(null);
+  const [session, setSession] = useState<SessionDetail | null>(null);
   const [streaming, setStreaming] = useState(false);
-  const [ws, setWs] = useState<WebSocket | null>(null);
+  const [connectionStatus, setConnectionStatus] =
+    useState<ConnectionStatus>("disconnected");
 
   // Refs to track retrieval/reasoning state during streaming (avoids stale closures)
   const retrievalRef = useRef<RetrievalDetails | null>(null);
   const reasoningRef = useRef("");
 
+  // ChatStream instance — stable across renders
+  const streamRef = useRef<ChatStream | null>(null);
+
   // Load session data
-  useEffect(() => {
+  const loadSession = useCallback(() => {
     if (!sessionId) return;
-    fetch(`/api/sessions/${sessionId}`)
-      .then((res) => {
-        if (!res.ok) throw new Error("Session deleted");
-        return res.json();
-      })
+    sessions
+      .get(sessionId)
       .then((data) => setSession(data))
       .catch(() => router.push("/chat"));
-  }, [router, sessionId]);
+  }, [sessionId, router]);
 
-  // WebSocket connection
   useEffect(() => {
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const host = window.location.host;
-    const wsUrl = `${protocol}//${host}/api/ws/chat`;
+    loadSession();
+  }, [loadSession]);
 
-    const socket = new WebSocket(wsUrl);
+  // WebSocket connection via ChatStream
+  useEffect(() => {
+    const stream = new ChatStream(sessionId, {
+      onChunk: (content) => {
+        setSession((prev) => {
+          if (!prev) return prev;
+          const messages = [...prev.messages];
+          const last = messages[messages.length - 1];
 
-    socket.onopen = () => setWs(socket);
-
-    socket.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-
-        if (msg.type === "retrieval_done") {
-          // Store retrieval details for the upcoming assistant message
-          const { type, ...details } = msg;
-          retrievalRef.current = details;
-        } else if (msg.type === "reasoning") {
-          // Accumulate reasoning text
-          reasoningRef.current += msg.content;
-        } else if (msg.type === "chunk") {
-          setSession((prev) => {
-            if (!prev) return prev;
-            const messages = [...prev.messages];
-            const last = messages[messages.length - 1];
-
-            if (last && last.role === "assistant") {
-              // Append to existing assistant message
-              messages[messages.length - 1] = {
-                ...last,
-                content: last.content + msg.content,
-              };
-            } else {
-              // Create new assistant message with retrieval/reasoning metadata
-              const metadata: Message["metadata"] = {};
-              if (retrievalRef.current) {
-                metadata.retrieval_details = retrievalRef.current;
-              }
-              if (reasoningRef.current) {
-                metadata.reasoning_text = reasoningRef.current;
-              }
-              messages.push({
-                id: "streaming",
-                role: "assistant",
-                content: msg.content,
-                created_at: new Date().toISOString(),
-                metadata,
-              });
-              // Clear refs for next message
-              retrievalRef.current = null;
-              reasoningRef.current = "";
+          if (last && last.role === "assistant") {
+            // Append to existing assistant message
+            messages[messages.length - 1] = {
+              ...last,
+              content: last.content + content,
+            };
+          } else {
+            // Create new assistant message with retrieval/reasoning metadata
+            const metadata: Message["metadata"] = {};
+            if (retrievalRef.current) {
+              metadata.retrieval_details = retrievalRef.current;
             }
-            return { ...prev, messages };
-          });
-        } else if (msg.type === "done") {
-          setStreaming(false);
-          retrievalRef.current = null;
-          reasoningRef.current = "";
-          // Reload session to get proper IDs and persisted metadata
-          fetch(`/api/sessions/${msg.session_id || sessionId}`)
-            .then((res) => res.json())
-            .then((data) => setSession(data))
-            .catch(console.error);
-        } else if (msg.type === "error") {
-          setStreaming(false);
-          console.error("WS error:", msg.message);
-        }
-      } catch (e) {
-        console.error("WS parse error", e);
-      }
-    };
+            if (reasoningRef.current) {
+              metadata.reasoning_text = reasoningRef.current;
+            }
+            messages.push({
+              id: "streaming",
+              role: "assistant",
+              content,
+              created_at: new Date().toISOString(),
+              metadata,
+            });
+            retrievalRef.current = null;
+            reasoningRef.current = "";
+          }
+          return { ...prev, messages };
+        });
+      },
 
-    socket.onclose = () => {
-      setWs(null);
-      setStreaming(false);
-    };
+      onReasoning: (content) => {
+        reasoningRef.current += content;
+      },
 
-    socket.onerror = () => {
-      setWs(null);
-      setStreaming(false);
-    };
+      onRetrievalDone: (details) => {
+        retrievalRef.current = details;
+      },
+
+      onDone: () => {
+        setStreaming(false);
+        retrievalRef.current = null;
+        reasoningRef.current = "";
+        // Reload session to get proper IDs and persisted metadata
+        loadSession();
+      },
+
+      onError: (message) => {
+        setStreaming(false);
+        console.error("ChatStream error:", message);
+      },
+
+      onStatusChange: (status) => {
+        setConnectionStatus(status);
+        if (status === "disconnected") setStreaming(false);
+      },
+    });
+
+    streamRef.current = stream;
+    stream.connect();
 
     return () => {
-      socket.close();
+      stream.disconnect();
+      streamRef.current = null;
     };
-  }, [sessionId]);
+  }, [sessionId, loadSession]);
 
   const sendMessage = useCallback(
     (content: string) => {
-      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      const stream = streamRef.current;
+      if (!stream) return;
 
       setStreaming(true);
-      ws.send(
-        JSON.stringify({
-          type: "query",
-          content,
-          session_id: sessionId,
-        })
-      );
+      stream.sendQuery(content);
     },
-    [ws, sessionId]
+    []
   );
+
+  const isConnected = connectionStatus === "connected";
 
   return (
     <div className="flex h-full flex-col">
@@ -158,20 +142,20 @@ export default function ChatSessionPage() {
         </div>
         <div
           className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
-            ws?.readyState === WebSocket.OPEN
+            isConnected
               ? "bg-[var(--success-soft)] text-[var(--success)]"
               : "bg-[var(--warning-soft)] text-[var(--warning)]"
           }`}
         >
-          {ws?.readyState === WebSocket.OPEN ? <Wifi size={13} /> : <WifiOff size={13} />}
-          {ws?.readyState === WebSocket.OPEN ? "已连接" : "连接中"}
+          {isConnected ? <Wifi size={13} /> : <WifiOff size={13} />}
+          {isConnected ? "已连接" : "连接中"}
         </div>
       </header>
 
       <div className="min-h-0 flex-1 overflow-auto">
         {session ? (
           <ChatMessages
-            messages={session.messages}
+            messages={session.messages as Message[]}
             streaming={streaming}
           />
         ) : (
@@ -182,7 +166,7 @@ export default function ChatSessionPage() {
       </div>
       <ChatComposer
         onSend={sendMessage}
-        disabled={!ws || ws.readyState !== WebSocket.OPEN || streaming}
+        disabled={!isConnected || streaming}
         placeholder={streaming ? "正在生成回答..." : "输入你的问题..."}
       />
     </div>

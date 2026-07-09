@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -13,16 +12,6 @@ logger = logging.getLogger(__name__)
 
 from core.parser import DocumentParser, PARSER_REGISTRY
 from core.project import ProjectConfig
-
-SUPPORTED_EXTENSIONS = {
-    ".c", ".cpp", ".cs", ".go", ".h", ".java", ".js", ".jsx",
-    ".md", ".mdx", ".php", ".py", ".rb", ".rs", ".ts", ".tsx", ".txt",
-    ".json", ".yaml", ".yml", ".toml", ".xml",
-    ".csv", ".sql", ".log",
-    ".pdf", ".docx", ".pptx",
-}
-
-SKIP_DIR_NAMES = {".git", ".hg", ".svn", "__pycache__"}
 
 
 def utc_now_iso() -> str:
@@ -140,35 +129,7 @@ class DocumentManifest:
         return list(self.data["documents"].values())
 
 
-class VectorStore(ABC):
-    """Abstract interface for vector/chunk storage.
-
-    Implementations must provide chunk-level CRUD and iteration.
-    """
-
-    @abstractmethod
-    def upsert_chunks(self, chunks: list[ChunkRecord]) -> None: ...
-
-    @abstractmethod
-    def delete_by_document_id(self, document_id: str) -> int: ...
-
-    @abstractmethod
-    def clear(self) -> None: ...
-
-    @abstractmethod
-    def count_chunks(self) -> int: ...
-
-    @abstractmethod
-    def count_documents(self) -> int: ...
-
-    @abstractmethod
-    def iter_records(self) -> list[dict[str, Any]]: ...
-
-    @abstractmethod
-    def get_record(self, chunk_id: str) -> dict[str, Any] | None: ...
-
-
-class JsonVectorStore(VectorStore):
+class VectorStore:
     def __init__(self, path: Path):
         self.path = path
         self.records: dict[str, dict[str, Any]] = {}
@@ -231,28 +192,24 @@ class IngestionEngine:
         self.root = (root or Path.cwd()).resolve()
         self.embedding_model = embedding_model
         self.co_dir = self.root / ".co-thinker"
-        self.vector_store = vector_store or JsonVectorStore(self.co_dir / "vectordb" / "chunks.json")
+        self.vector_store = vector_store or VectorStore(self.co_dir / "vectordb" / "chunks.json")
         self.manifest = DocumentManifest(self.co_dir / "vectordb" / "manifest.json")
         self.parser_registry = parser_registry if parser_registry is not None else PARSER_REGISTRY
 
     def scan_files(self, root_dir: str | Path | None = None) -> list[Path]:
-        root = Path(root_dir) if root_dir is not None else self.root
-        if not root.exists():
-            return []
-        files: list[Path] = []
-        for path in root.rglob("*"):
-            if not path.is_file():
-                continue
-            if any(part.startswith(".") for part in path.parts):
-                continue
-            if any(part in SKIP_DIR_NAMES for part in path.parts):
-                continue
-            if ".co-thinker" in path.parts:
-                continue
-            if path.suffix.lower() not in SUPPORTED_EXTENSIONS:
-                continue
-            files.append(path)
-        return sorted(files)
+        """扫描工作目录，返回可索引文件路径。
+
+        由 ``FileCatalog.ingest_candidates()`` 实现。
+        """
+        from core.file_catalog import FileCatalog
+
+        catalog = FileCatalog(
+            root=self.root,
+            exclude_patterns=self.config.exclude_patterns,
+            supported_extensions=self.config.supported_extensions,
+            max_file_size_mb=self.config.max_file_size_mb,
+        )
+        return catalog.ingest_candidates(root_dir=root_dir)
 
     def add_files(self, file_paths: list[str | Path], tags: list[str] | None = None) -> IngestSummary:
         import time
@@ -276,7 +233,7 @@ class IngestionEngine:
                 results.append(FileIngestResult(path=source_path, status="failed", document_id=document_id, error=error))
                 continue
 
-            if path.suffix.lower() not in SUPPORTED_EXTENSIONS:
+            if path.suffix.lower() not in set(self.config.supported_extensions):
                 skipped_files += 1
                 results.append(
                     FileIngestResult(

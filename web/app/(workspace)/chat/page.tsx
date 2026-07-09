@@ -2,18 +2,14 @@
 
 import { useRouter } from "next/navigation";
 import { MessageSquare, Plus } from "lucide-react";
+import { sessions } from "@/lib/api";
 
 export default function ChatNewPage() {
   const router = useRouter();
 
   const createSession = async () => {
     try {
-      const res = await fetch("/api/sessions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: "新对话" }),
-      });
-      const data = await res.json();
+      const data = await sessions.create("新对话");
       router.push(`/chat/${data.id}`);
     } catch (e) {
       console.error("Failed to create session", e);

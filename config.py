@@ -1,5 +1,15 @@
 from __future__ import annotations
 
+# DEPRECATED — use core.project (ProjectConfig, ProjectContext) instead.
+import warnings as _warnings
+
+_warnings.warn(
+    "config.py (Settings, load_settings, etc.) is deprecated. "
+    "Use core.project (ProjectConfig, ProjectContext) instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
 import os
 import warnings
 from dataclasses import dataclass

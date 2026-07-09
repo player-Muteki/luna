@@ -49,28 +49,10 @@ def _banner(version: str) -> str:
 
 
 def _setup_project_context() -> object:
-    """Create and wire up a ProjectContext with all engines."""
-    from core.project import ProjectContext, get_api_key, get_llm, get_embedding_model
+    """Create and wire up a WorkspaceRuntime with all engines."""
+    from core.runtime import WorkspaceRuntime
 
-    ctx = ProjectContext.load()
-
-    # API key
-    api_key = ""
-    try:
-        api_key = get_api_key(ctx)
-    except Exception:
-        pass
-
-    if api_key:
-        try:
-            ctx.llm = get_llm(ctx)
-        except Exception:
-            pass
-
-    ctx.embedding_model = get_embedding_model(ctx)
-    ctx.setup_engines()
-
-    return ctx
+    return WorkspaceRuntime.bootstrap()
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -188,35 +170,45 @@ def run(
     typer.echo(f"[Q] {query}")
     typer.echo("")
 
-    ctx = _setup_project_context()
+    runtime = _setup_project_context()
 
-    # 确保有索引数据
-    if not ctx.vectorstore or ctx.vectorstore.count_chunks() == 0:
-        typer.echo("[INFO] 索引为空，正在扫描并索引文件...")
-        files = ctx.ingest_engine.scan_files()
-        if files:
-            summary = ctx.ingest_engine.add_files(files)
-            typer.echo(f"[OK] 已索引 {summary.indexed_files} 个文件，共 {summary.total_chunks} 个片段")
-        else:
-            typer.echo("[WARN] 工作目录中未找到可索引的文件")
-            raise typer.Exit(0)
+    # 一次性问答（自动处理索引 → 检索 → 生成）
+    result = runtime.ask(query)
 
-    # 检索
-    results = ctx.retriever.retrieve(query)
-    if not results.results:
+    # 索引反馈
+    if result.indexed_file_count > 0:
+        typer.echo(f"[INFO] 已自动索引 {result.indexed_file_count} 个文件，共 {result.indexed_chunk_count} 个片段")
+    elif result.indexed_file_count == 0 and result.references:
+        # 已有数据，无需索引
+        pass
+
+    # 检索反馈
+    if result.retrieval_details and result.references:
+        typer.echo(f"[R] 共检索到 {len(result.references)} 个相关片段（{result.retrieval_details['mode']} 模式）")
+
+    # 没有结果
+    if not result.references:
         typer.echo("[INFO] 知识库中未找到相关信息")
+        if result.answer:
+            typer.echo("")
+            typer.echo(result.answer)
         raise typer.Exit(0)
 
-    # 生成
-    generation = ctx.generator.generate(query, results)
-    typer.echo(generation.answer)
+    # 显示推理过程（如果有）
+    if result.reasoning:
+        typer.echo("")
+        typer.echo(result.reasoning)
+
+    # 答案是最后显示
+    typer.echo("")
+    typer.echo(result.answer)
     typer.echo("")
 
     # 显示引用来源
-    if generation.references:
+    if result.references:
         typer.echo("── 引用来源 ──")
-        for i, ref in enumerate(generation.references[:5], 1):
-            typer.echo(f"  [{i}] {ref.source_path} (score: {ref.score:.3f})")
+        for i, ref in enumerate(result.references[:5], 1):
+            typer.echo(f"  [{i}] {ref.get('source_path', 'unknown')} (score: {ref.get('score', 0):.3f})")
 
 
 @app.command()
@@ -224,10 +216,28 @@ def scan(
     dir: str = typer.Option(None, "--dir", help="项目目录（默认当前目录）"),
 ):
     """扫描工作目录，显示文件索引状态"""
-    from core.project import ProjectContext
+    from core.file_catalog import FileCatalog
+    from core.project import ProjectConfig
 
-    ctx = ProjectContext.load(dir)
-    files = ctx.scan_files()
+    scan_dir = Path(dir).resolve() if dir else Path.cwd().resolve()
+    co_dir = scan_dir / ".co-thinker"
+    config = ProjectConfig.load(co_dir / "config.toml")
+
+    # 加载 manifest 以获取索引状态
+    manifest = None
+    manifest_path = co_dir / "vectordb" / "manifest.json"
+    if manifest_path.exists():
+        from core.ingest import DocumentManifest
+        manifest = DocumentManifest(manifest_path)
+
+    catalog = FileCatalog(
+        root=scan_dir,
+        exclude_patterns=config.exclude_patterns,
+        supported_extensions=config.supported_extensions,
+        max_file_size_mb=config.max_file_size_mb,
+        manifest=manifest,
+    )
+    files = catalog.browse()
 
     files_only = [f for f in files if not f["is_dir"]]
     dirs_only = [f for f in files if f["is_dir"]]
@@ -235,7 +245,7 @@ def scan(
     indexed = sum(1 for f in files_only if f["is_indexed"])
     total = len(files_only)
 
-    typer.echo(f"工作目录: {ctx.root}")
+    typer.echo(f"工作目录: {scan_dir}")
     typer.echo(f"文件总数: {total}, 已索引: {indexed}")
     typer.echo("")
 
@@ -402,8 +412,18 @@ def _start_api_only(api_port: int, cwd: Path) -> None:
         typer.echo("[OK] Co-Thinker 已关闭")
 
 
-def _check_npm() -> bool:
-    """检查 npm 是否可用（支持 nvm 等自定义路径）。"""
+    try:
+        result = subprocess.run(
+            ["which", "npm"],
+            capture_output=True,
+            timeout=10,
+        )
+        if result.returncode == 0:
+            return True
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+    # 回退：尝试常见路径
     # 尝试常见的 node 安装路径
     node_candidates = [
         "/opt/homebrew/bin",

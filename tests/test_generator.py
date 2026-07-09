@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import PropertyMock
 
-from app.generator import NO_RESULT_MESSAGE, RAGGenerator
-from config import ensure_directories, load_settings
+from core.generator import NO_RESULT_MESSAGE, RAGGenerator
 
-from .conftest import FakeEmbeddingModel, FakeLLM, EmptyLLM, StreamingLLM, make_settings, build_retrieval_results
+from .conftest import FakeLLM, EmptyLLM, StreamingLLM, build_retrieval_results
 
 
 def test_generate_returns_no_result_without_context(tmp_path: Path) -> None:
-    settings, results = build_retrieval_results(tmp_path, query="nonexistent-token")
-    generator = RAGGenerator(settings, llm=FakeLLM())
+    config, results = build_retrieval_results(tmp_path, query="nonexistent-token")
+    generator = RAGGenerator(config, llm=FakeLLM())
 
     empty_results = results.__class__(
         original_query="missing",
@@ -28,8 +28,8 @@ def test_generate_returns_no_result_without_context(tmp_path: Path) -> None:
 
 
 def test_build_messages_includes_context_history_and_question(tmp_path: Path) -> None:
-    settings, results = build_retrieval_results(tmp_path)
-    generator = RAGGenerator(settings, llm=FakeLLM())
+    config, results = build_retrieval_results(tmp_path)
+    generator = RAGGenerator(config, llm=FakeLLM())
     history = [
         {"role": "user", "content": "先介绍一下 retrieval"},
         {"role": "assistant", "content": "好的"},
@@ -46,12 +46,12 @@ def test_build_messages_includes_context_history_and_question(tmp_path: Path) ->
 
 def test_build_messages_low_confidence_uses_instructions_tag(tmp_path: Path) -> None:
     """Low confidence should appear in <instructions> tag, not inside <context>."""
-    settings, results = build_retrieval_results(tmp_path)
-    generator = RAGGenerator(settings, llm=FakeLLM())
+    config, results = build_retrieval_results(tmp_path)
+    generator = RAGGenerator(config, llm=FakeLLM())
 
     # Force low confidence
     results.results[0].final_score = 0.1
-    results.__class__.confidence = property(lambda self: "low")
+    type(results).confidence = PropertyMock(return_value="low")
 
     messages = generator.build_messages("retrieval 是什么？", results)
 
@@ -65,8 +65,8 @@ def test_build_messages_low_confidence_uses_instructions_tag(tmp_path: Path) -> 
 
 
 def test_extract_references_returns_chunk_metadata(tmp_path: Path) -> None:
-    settings, results = build_retrieval_results(tmp_path)
-    generator = RAGGenerator(settings, llm=FakeLLM())
+    config, results = build_retrieval_results(tmp_path)
+    generator = RAGGenerator(config, llm=FakeLLM())
 
     references = generator.extract_references(results)
 
@@ -77,8 +77,8 @@ def test_extract_references_returns_chunk_metadata(tmp_path: Path) -> None:
 
 
 def test_generate_uses_llm_and_preserves_references(tmp_path: Path) -> None:
-    settings, results = build_retrieval_results(tmp_path)
-    generator = RAGGenerator(settings, llm=FakeLLM())
+    config, results = build_retrieval_results(tmp_path)
+    generator = RAGGenerator(config, llm=FakeLLM())
 
     generation = generator.generate("retrieval", results)
 
@@ -89,27 +89,29 @@ def test_generate_uses_llm_and_preserves_references(tmp_path: Path) -> None:
 
 
 def test_stream_generate_with_fake_llm_produces_answer(tmp_path: Path) -> None:
-    settings, results = build_retrieval_results(tmp_path)
-    generator = RAGGenerator(settings, llm=FakeLLM())
+    config, results = build_retrieval_results(tmp_path)
+    generator = RAGGenerator(config, llm=FakeLLM())
 
     chunks = list(generator.stream_generate("retrieval", results))
 
     assert len(chunks) == 1
-    assert "回答基于检索上下文" in chunks[0]
+    event_type, content = chunks[0]
+    assert event_type == "content"
+    assert "回答基于检索上下文" in content
 
 
 def test_stream_generate_yields_stream_chunks(tmp_path: Path) -> None:
-    settings, results = build_retrieval_results(tmp_path)
-    generator = RAGGenerator(settings, llm=StreamingLLM())
+    config, results = build_retrieval_results(tmp_path)
+    generator = RAGGenerator(config, llm=StreamingLLM())
 
     chunks = list(generator.stream_generate("retrieval", results))
 
-    assert chunks == ["第一段", "第二段"]
+    assert chunks == [("content", "第一段"), ("content", "第二段")]
 
 
 def test_generate_returns_friendly_error_for_empty_response(tmp_path: Path) -> None:
-    settings, results = build_retrieval_results(tmp_path)
-    generator = RAGGenerator(settings, llm=EmptyLLM())
+    config, results = build_retrieval_results(tmp_path)
+    generator = RAGGenerator(config, llm=EmptyLLM())
 
     generation = generator.generate("retrieval", results)
 

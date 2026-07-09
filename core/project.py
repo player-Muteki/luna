@@ -199,6 +199,7 @@ class ProjectContext:
         self.manifest: Any | None = None
         self.embedding_model: Any | None = None
         self.llm: Any | None = None
+        self.generator: Any | None = None
         self.ingest_engine: Any | None = None
         self.retriever: Any | None = None
         self.chat_engine: Any | None = None
@@ -230,12 +231,12 @@ class ProjectContext:
 
         调用前需先设置好 llm 和 embedding_model。
         """
-        from core.ingest import IngestionEngine, JsonVectorStore, DocumentManifest
+        from core.ingest import IngestionEngine, VectorStore, DocumentManifest
         from core.retriever import HybridRetriever
         from core.generator import RAGGenerator
         from core.chat_engine import ChatEngine
 
-        vectorstore = JsonVectorStore(self.chunks_path)
+        vectorstore = VectorStore(self.chunks_path)
         self.vectorstore = vectorstore
 
         manifest = DocumentManifest(self.manifest_path)
@@ -269,72 +270,20 @@ class ProjectContext:
     # ── 文件扫描 ─────────────────────────────────────────────────────
 
     def scan_files(self, subdir: str | None = None) -> list[dict[str, Any]]:
+        """扫描工作目录，返回文件列表（含索引状态），供前端勾选。
+
+        由 ``FileCatalog.browse()`` 实现。
         """
-        扫描工作目录，返回文件列表（含索引状态），供前端勾选。
-        返回每个文件的 dict：path, name, ext, size, mtime, is_dir, is_indexed, document_id
-        """
-        scan_root = self.root
-        if subdir:
-            scan_root = self.root / subdir
-            if not scan_root.exists():
-                return []
+        from core.file_catalog import FileCatalog
 
-        exclude_set = set(self.config.exclude_patterns)
-        ext_set = set(self.config.supported_extensions)
-        max_bytes = self.config.max_file_size_mb * 1024 * 1024
-
-        # 收集已索引的文档以便标注状态
-        indexed_map: dict[str, str] = {}
-        if self.manifest:
-            for doc in self.manifest.list_documents():
-                if doc.get("status") == "indexed":
-                    indexed_map[doc["source_path"]] = doc["document_id"]
-
-        files: list[dict[str, Any]] = []
-        for path in scan_root.rglob("*"):
-            rel = path.relative_to(self.root)
-
-            # 排除
-            if any(part in exclude_set for part in path.parts):
-                continue
-            if any(part.startswith(".") for part in path.parts):
-                continue
-            if ".co-thinker" in path.parts:
-                continue
-
-            if path.is_dir():
-                files.append({
-                    "path": str(rel),
-                    "name": path.name,
-                    "ext": "",
-                    "size": 0,
-                    "mtime": path.stat().st_mtime,
-                    "is_dir": True,
-                    "is_indexed": False,
-                    "document_id": "",
-                })
-            elif path.is_file():
-                if path.suffix.lower() not in ext_set:
-                    continue
-                if path.stat().st_size > max_bytes:
-                    continue
-
-                sp = str(rel)
-                doc_id = indexed_map.get(sp, "")
-                files.append({
-                    "path": sp,
-                    "name": path.name,
-                    "ext": path.suffix.lower(),
-                    "size": path.stat().st_size,
-                    "mtime": path.stat().st_mtime,
-                    "is_dir": False,
-                    "is_indexed": bool(doc_id),
-                    "document_id": doc_id,
-                })
-
-        # 目录优先，然后再按路径排序
-        files.sort(key=lambda f: (not f["is_dir"], f["path"]))
-        return files
+        catalog = FileCatalog(
+            root=self.root,
+            exclude_patterns=self.config.exclude_patterns,
+            supported_extensions=self.config.supported_extensions,
+            max_file_size_mb=self.config.max_file_size_mb,
+            manifest=self.manifest,
+        )
+        return catalog.browse(subdir=subdir)
 
     def get_project_info(self) -> dict[str, Any]:
         """返回项目信息，供前端展示。"""

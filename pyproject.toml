@@ -55,7 +55,7 @@ version = {attr = "__version__.__version__"}
 
 [tool.setuptools]
 py-modules = ["cli", "config", "__version__"]
-packages = ["core", "api", "api.routes", "app", "web"]
+packages = ["core", "api", "api.routes", "web"]
 
 [tool.setuptools.package-data]
 web = [
