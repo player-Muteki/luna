@@ -1,4 +1,4 @@
-# Co-Thinker install script (Windows PowerShell)
+﻿# Co-Thinker install script (Windows PowerShell)
 # Downloads the latest .whl from GitHub and installs to a dedicated venv.
 #
 # Usage:
