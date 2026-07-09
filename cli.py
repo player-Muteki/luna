@@ -216,28 +216,11 @@ def scan(
     dir: str = typer.Option(None, "--dir", help="项目目录（默认当前目录）"),
 ):
     """扫描工作目录，显示文件索引状态"""
-    from core.file_catalog import FileCatalog
-    from core.project import ProjectConfig
+    from core.runtime import WorkspaceRuntime
 
     scan_dir = Path(dir).resolve() if dir else Path.cwd().resolve()
-    co_dir = scan_dir / ".co-thinker"
-    config = ProjectConfig.load(co_dir / "config.toml")
-
-    # 加载 manifest 以获取索引状态
-    manifest = None
-    manifest_path = co_dir / "vectordb" / "manifest.json"
-    if manifest_path.exists():
-        from core.ingest import DocumentManifest
-        manifest = DocumentManifest(manifest_path)
-
-    catalog = FileCatalog(
-        root=scan_dir,
-        exclude_patterns=config.exclude_patterns,
-        supported_extensions=config.supported_extensions,
-        max_file_size_mb=config.max_file_size_mb,
-        manifest=manifest,
-    )
-    files = catalog.browse()
+    runtime = WorkspaceRuntime.bootstrap(str(scan_dir))
+    files = runtime.scan_files()
 
     files_only = [f for f in files if not f["is_dir"]]
     dirs_only = [f for f in files if f["is_dir"]]
@@ -323,58 +306,25 @@ def _write_global_config(api_key: str) -> None:
 
 def _start_full_stack(web_dir: Path, port: int, api_port: int, cwd: Path, open_browser: bool = True) -> None:
     """同时启动 FastAPI 后端和 Next.js 前端。"""
-    # 启动 API 服务
     api_proc = _start_api_process(api_port, cwd)
 
-    # 检查 Node.js / npm
     typer.echo("[WEB] 检查 Node.js 环境...")
-    if not _check_npm():
+    if not _ensure_npm_available():
         typer.echo("[ERROR] 未检测到 npm，请先安装 Node.js (https://nodejs.org/)")
         typer.echo("[INFO] 仅启动 API 服务")
         _start_api_only(api_port, cwd)
         return
 
-    # 安装前端依赖
-    node_modules = web_dir / "node_modules"
-    if not node_modules.exists():
-        typer.echo("[WEB] 正在安装前端依赖 (npm install)...")
-        result = subprocess.run(
-            ["npm", "install"],
-            cwd=str(web_dir),
-        )
-        if result.returncode != 0:
-            typer.echo("[ERROR] npm install 失败，仅启动 API 服务")
-            _start_api_only(api_port, cwd)
-            return
-        typer.echo("[WEB] 前端依赖安装完成")
-
-    # 检测生产构建产物，决定启动模式
-    next_build = web_dir / ".next"
-    build_manifest = next_build / "build-manifest.json"
-    if next_build.exists() and build_manifest.exists():
-        typer.echo(f"[WEB] 启动 Next.js 生产服务器 (port {port})...")
-        mode_cmd = ["npx", "next", "start", "--port", str(port)]
-    else:
-        typer.echo(f"[WEB] 启动 Next.js 开发服务器 (port {port})...")
-        mode_cmd = ["npx", "next", "dev", "--port", str(port)]
-
-    # 确保 npx 可用
-    npx_cmd = "npx"
-    if os.name == "nt":
-        npx_cmd = "npx.cmd"
+    if not _install_frontend_deps(web_dir):
+        _start_api_only(api_port, cwd)
+        return
 
     env = os.environ.copy()
     env["NEXT_PUBLIC_API_URL"] = f"http://localhost:{api_port}"
-
-    web_proc = subprocess.Popen(
-        [npx_cmd, "next", "dev", "--port", str(port)],
-        cwd=str(web_dir),
-        env=env,
-    )
+    web_proc = _start_nextjs(web_dir, port, env)
 
     if open_browser:
-        import webbrowser
-        webbrowser.open(f"http://localhost:{port}")
+        _open_browser(port)
 
     typer.echo(f"[OK] API: http://localhost:{api_port}")
     typer.echo(f"[OK] Web: http://localhost:{port}")
@@ -395,6 +345,39 @@ def _start_full_stack(web_dir: Path, port: int, api_port: int, cwd: Path, open_b
         typer.echo("[OK] Co-Thinker 已关闭")
 
 
+def _install_frontend_deps(web_dir: Path) -> bool:
+    """安装前端 npm 依赖，成功返回 True。"""
+    node_modules = web_dir / "node_modules"
+    if node_modules.exists():
+        return True
+    typer.echo("[WEB] 正在安装前端依赖 (npm install)...")
+    result = subprocess.run(["npm", "install"], cwd=str(web_dir))
+    if result.returncode != 0:
+        typer.echo("[ERROR] npm install 失败")
+        return False
+    typer.echo("[WEB] 前端依赖安装完成")
+    return True
+
+
+def _start_nextjs(web_dir: Path, port: int, env: dict[str, str]) -> subprocess.Popen:
+    """启动 Next.js 前端进程。"""
+    next_build = web_dir / ".next"
+    build_manifest = next_build / "build-manifest.json"
+    if next_build.exists() and build_manifest.exists():
+        typer.echo(f"[WEB] 启动 Next.js 生产服务器 (port {port})...")
+        cmd = ["npx", "next", "start", "--port", str(port)]
+    else:
+        typer.echo(f"[WEB] 启动 Next.js 开发服务器 (port {port})...")
+        cmd = ["npx", "next", "dev", "--port", str(port)]
+    return subprocess.Popen(cmd, cwd=str(web_dir), env=env)
+
+
+def _open_browser(port: int) -> None:
+    """在默认浏览器中打开指定端口。"""
+    import webbrowser
+    webbrowser.open(f"http://localhost:{port}")
+
+
 def _start_api_only(api_port: int, cwd: Path) -> None:
     """仅启动 FastAPI API 服务。"""
     proc = _start_api_process(api_port, cwd)
@@ -412,42 +395,36 @@ def _start_api_only(api_port: int, cwd: Path) -> None:
         typer.echo("[OK] Co-Thinker 已关闭")
 
 
+def _ensure_npm_available() -> bool:
+    """检测并确保 npm 在 PATH 中可用。"""
     try:
-        result = subprocess.run(
-            ["which", "npm"],
-            capture_output=True,
-            timeout=10,
-        )
-        if result.returncode == 0:
-            return True
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        pass
+        subprocess.run(["which", "npm"], capture_output=True, timeout=10, check=True)
+        return True
+    except (FileNotFoundError, subprocess.TimeoutExpired, subprocess.CalledProcessError):
+        _add_node_paths()
 
-    # 回退：尝试常见路径
-    # 尝试常见的 node 安装路径
-    node_candidates = [
+    try:
+        subprocess.run(["npm", "--version"], capture_output=True, timeout=10, check=True)
+        return True
+    except (FileNotFoundError, subprocess.TimeoutExpired, subprocess.CalledProcessError):
+        return False
+
+
+def _add_node_paths() -> None:
+    """将常见 Node.js 安装路径加入 PATH（如未包含）。"""
+    candidates = [
         "/opt/homebrew/bin",
         "/usr/local/bin",
         os.path.expanduser("~/.nvm/versions/node/*/bin"),
     ]
-    for candidate in node_candidates:
-        if "*" in candidate:
+    for path in candidates:
+        if "*" in path:
             import glob
-            matches = glob.glob(candidate)
+            matches = glob.glob(path)
             if matches:
                 os.environ.setdefault("PATH", f"{matches[-1]}:{os.environ.get('PATH', '')}")
         else:
-            os.environ.setdefault("PATH", f"{candidate}:{os.environ.get('PATH', '')}")
-
-    try:
-        result = subprocess.run(
-            ["npm", "--version"],
-            capture_output=True,
-            timeout=10,
-        )
-        return result.returncode == 0
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return False
+            os.environ.setdefault("PATH", f"{path}:{os.environ.get('PATH', '')}")
 
 
 def _start_api_process(api_port: int, cwd: Path) -> subprocess.Popen:

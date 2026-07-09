@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import io
+from pathlib import Path
 from typing import Any
 
 import pytest
 
 from core.ingest import IngestionEngine
-from core.project import ProjectConfig
+from core.project import ProjectConfig, ProjectContext
 from core.retriever import HybridRetriever
+from core.runtime import WorkspaceRuntime
 
 
 # ── Fake embedding model ──────────────────────────────────────────
@@ -173,6 +175,26 @@ def build_retrieval_results(
     retriever = HybridRetriever(config=config, vector_store=engine.vector_store, embedding_model=embedding_model)
     results = retriever.retrieve(query, mode="hybrid")
     return config, results
+
+
+# ── WorkspaceRuntime helper ────────────────────────────────────────
+
+
+def make_runtime(tmp_path: Path) -> WorkspaceRuntime:
+    """创建带假引擎的 WorkspaceRuntime，用于测试。"""
+    co_dir = tmp_path / ".co-thinker"
+    (co_dir / "vectordb").mkdir(parents=True, exist_ok=True)
+
+    ctx = ProjectContext(tmp_path)
+    ctx.config.chunk_size = 200
+    ctx.config.chunk_overlap = 20
+    ctx.config.top_k = 5
+    ctx.config.retrieval_candidate_k = 10
+    ctx.config.similarity_cutoff = 0.0
+    ctx.embedding_model = FakeEmbeddingModel()
+    ctx.llm = FakeLLM()
+    ctx.setup_engines()
+    return WorkspaceRuntime._from_ctx(ctx)
 
 
 # ── Document parsing fixtures ─────────────────────────────────────

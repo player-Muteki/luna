@@ -152,7 +152,7 @@ class RAGGenerator:
 
         try:
             messages = self.build_messages(query, retrieval_results, chat_history)
-            answer = self._invoke_llm(messages)
+            answer = self._generate_with_llm(messages)
             if not answer.strip():
                 raise ValueError("LLM returned empty content")
             return GenerationResult(
@@ -165,6 +165,7 @@ class RAGGenerator:
                 confidence=confidence,
             )
         except Exception as exc:
+            logger.exception("Generation failed: %s", exc)
             return GenerationResult(
                 answer=self.friendly_error_message(exc),
                 references=references,
@@ -218,6 +219,7 @@ class RAGGenerator:
                 if delta.content:
                     yield ("content", delta.content)
         except Exception as exc:
+            logger.exception("Stream generation failed: %s", exc)
             yield ("content", self.friendly_error_message(exc))
 
     def build_messages(
@@ -286,7 +288,7 @@ class RAGGenerator:
             lines.append(f"{role}: {content}")
         return "\n".join(lines)
 
-    def _invoke_llm(self, messages: list[dict[str, str]]) -> str:
+    def _generate_with_llm(self, messages: list[dict[str, str]]) -> str:
         if self.llm is None:
             return self._fallback_answer(messages)
 

@@ -16,32 +16,9 @@ from typing import Any
 
 import pytest
 
-from core.project import ProjectConfig, ProjectContext
 from core.runtime import WorkspaceRuntime, AskResult
 
-# 复用 conftest 中的假组件
-from tests.conftest import FakeEmbeddingModel, FakeLLM
-
-
-# ── fixture 辅助 ───────────────────────────────────────────────────
-
-
-def _make_project_context(tmp_path: Path) -> ProjectContext:
-    """创建最小可用的 ProjectContext + 假引擎。"""
-    co_dir = tmp_path / ".co-thinker"
-    (co_dir / "vectordb").mkdir(parents=True, exist_ok=True)
-
-    config = ProjectConfig.load(co_dir / "config.toml")
-    config.chunk_size = 200
-    config.chunk_overlap = 20
-
-    # 用 Context 构造 + 覆盖配置
-    ctx = ProjectContext(tmp_path)
-    ctx.config = config
-    ctx.embedding_model = FakeEmbeddingModel()
-    ctx.llm = FakeLLM()
-    ctx.setup_engines()
-    return ctx
+from tests.conftest import make_runtime
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -67,8 +44,7 @@ class TestBootstrap:
 class TestAsk:
     def test_ask_auto_indexes_and_generates(self, tmp_path: Path) -> None:
         """空索引 → 扫描文件 → 索引 → 检索 → 生成。"""
-        ctx = _make_project_context(tmp_path)
-        runtime = WorkspaceRuntime._from_ctx(ctx)
+        runtime = make_runtime(tmp_path)
 
         # 写一个可索引的文件
         (tmp_path / "readme.md").write_text(
@@ -86,8 +62,7 @@ class TestAsk:
 
     def test_ask_no_files_returns_empty(self, tmp_path: Path) -> None:
         """没有可索引文件时，返回空但不会崩溃。"""
-        ctx = _make_project_context(tmp_path)
-        runtime = WorkspaceRuntime._from_ctx(ctx)
+        runtime = make_runtime(tmp_path)
 
         result = runtime.ask("anything")
 
@@ -99,10 +74,9 @@ class TestAsk:
 
     def test_ask_preexisting_index(self, tmp_path: Path) -> None:
         """已有索引时不重复索引。"""
-        ctx = _make_project_context(tmp_path)
         (tmp_path / "doc.md").write_text("# Doc\nContent about generators.", encoding="utf-8")
 
-        runtime = WorkspaceRuntime._from_ctx(ctx)
+        runtime = make_runtime(tmp_path)
 
         # 第一次调用：会索引
         first = runtime.ask("generator")
@@ -116,10 +90,9 @@ class TestAsk:
 
     def test_ask_confidence_and_references(self, tmp_path: Path) -> None:
         """AskResult 包含 confidence 与 references。"""
-        ctx = _make_project_context(tmp_path)
         (tmp_path / "doc.md").write_text("# Doc\nContent about retrieval.", encoding="utf-8")
 
-        runtime = WorkspaceRuntime._from_ctx(ctx)
+        runtime = make_runtime(tmp_path)
         result = runtime.ask("retrieval")
 
         assert result.confidence in ("high", "medium", "low", "none")
@@ -136,8 +109,7 @@ class TestAsk:
 
 class TestDelegation:
     def test_engine_properties(self, tmp_path: Path) -> None:
-        ctx = _make_project_context(tmp_path)
-        runtime = WorkspaceRuntime._from_ctx(ctx)
+        runtime = make_runtime(tmp_path)
 
         assert runtime.llm is not None
         assert runtime.vectorstore is not None
@@ -150,8 +122,7 @@ class TestDelegation:
         assert runtime.root == tmp_path.resolve()
 
     def test_scan_files_delegation(self, tmp_path: Path) -> None:
-        ctx = _make_project_context(tmp_path)
-        runtime = WorkspaceRuntime._from_ctx(ctx)
+        runtime = make_runtime(tmp_path)
 
         (tmp_path / "guide.md").write_text("# Guide", encoding="utf-8")
         files = runtime.scan_files()
@@ -166,8 +137,7 @@ class TestDelegation:
 
 class TestInfo:
     def test_get_project_info(self, tmp_path: Path) -> None:
-        ctx = _make_project_context(tmp_path)
-        runtime = WorkspaceRuntime._from_ctx(ctx)
+        runtime = make_runtime(tmp_path)
 
         info = runtime.get_project_info()
         assert info["root"] == str(tmp_path.resolve())
@@ -176,8 +146,7 @@ class TestInfo:
         assert "stats" in info
 
     def test_get_stats(self, tmp_path: Path) -> None:
-        ctx = _make_project_context(tmp_path)
-        runtime = WorkspaceRuntime._from_ctx(ctx)
+        runtime = make_runtime(tmp_path)
 
         stats = runtime.get_stats()
         assert "document_count" in stats

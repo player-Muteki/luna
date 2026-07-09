@@ -12,8 +12,11 @@ supported extensions、max file size），对外提供两个视图：
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 class FileCatalog:
@@ -135,11 +138,11 @@ class FileCatalog:
         """从 manifest 构建 {source_path → document_id} 映射。"""
         if self.manifest is None:
             return {}
+        indexed_map: dict[str, str] = {}
         try:
-            indexed_map: dict[str, str] = {}
             for doc in self.manifest.list_documents():
                 if doc.get("status") == "indexed":
                     indexed_map[doc["source_path"]] = doc["document_id"]
-            return indexed_map
-        except Exception:
-            return {}
+        except Exception as exc:
+            logger.warning("Failed to build indexed map from manifest: %s", exc)
+        return indexed_map

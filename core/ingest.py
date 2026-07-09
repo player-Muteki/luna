@@ -215,122 +215,21 @@ class IngestionEngine:
         import time
 
         started = time.perf_counter()
-        results: list[FileIngestResult] = []
-        indexed_files = 0
-        skipped_files = 0
-        failed_files = 0
-        total_chunks = 0
-
-        for raw_path in file_paths:
-            path = Path(raw_path)
-            source_path = self._display_path(path)
-            document_id = build_document_id(source_path)
-
-            if not path.exists() or not path.is_file():
-                failed_files += 1
-                error = "File does not exist"
-                self.manifest.mark_failed(source_path, error, document_id=document_id)
-                results.append(FileIngestResult(path=source_path, status="failed", document_id=document_id, error=error))
-                continue
-
-            if path.suffix.lower() not in set(self.config.supported_extensions):
-                skipped_files += 1
-                results.append(
-                    FileIngestResult(
-                        path=source_path,
-                        status="skipped",
-                        document_id=document_id,
-                        error=f"Unsupported file type: {path.suffix.lower()}",
-                    )
-                )
-                continue
-
-            try:
-                file_bytes = path.read_bytes()
-                content_hash = sha256_bytes(file_bytes)
-                existing = self.manifest.find_by_path(source_path)
-                if existing and existing.get("content_hash") == content_hash and existing.get("status") == "indexed":
-                    skipped_files += 1
-                    results.append(
-                        FileIngestResult(
-                            path=source_path,
-                            status="skipped",
-                            document_id=document_id,
-                            chunk_count=existing.get("chunk_count", 0),
-                        )
-                    )
-                    continue
-
-                text = self._extract_text(path, file_bytes, path.suffix.lower())
-                normalized = normalize_text(text)
-                if not normalized:
-                    raise ValueError("File is empty after normalization")
-
-                if existing:
-                    self.vector_store.delete_by_document_id(document_id)
-
-                chunks = self._build_chunks(
-                    text=normalized,
-                    path=path,
-                    source_path=source_path,
-                    document_id=document_id,
-                    content_hash=content_hash,
-                    tags=tags or [],
-                )
-                embeddings = self._embed_chunks([chunk.text for chunk in chunks])
-                for chunk, embedding in zip(chunks, embeddings):
-                    chunk.embedding = embedding
-
-                self.vector_store.upsert_chunks(chunks)
-                now = utc_now_iso()
-                record = {
-                    "document_id": document_id,
-                    "source_path": source_path,
-                    "file_name": path.name,
-                    "file_ext": path.suffix.lower(),
-                    "content_hash": content_hash,
-                    "mtime": path.stat().st_mtime,
-                    "size_bytes": path.stat().st_size,
-                    "chunk_count": len(chunks),
-                    "tags": tags or [],
-                    "status": "indexed",
-                    "created_at": existing.get("created_at", now) if existing else now,
-                    "updated_at": now,
-                    "last_error": None,
-                }
-                self.manifest.upsert_document(record)
-
-                indexed_files += 1
-                total_chunks += len(chunks)
-                results.append(
-                    FileIngestResult(
-                        path=source_path,
-                        status="indexed",
-                        document_id=document_id,
-                        chunk_count=len(chunks),
-                    )
-                )
-            except Exception as exc:
-                failed_files += 1
-                self.manifest.mark_failed(source_path, str(exc), document_id=document_id)
-                results.append(
-                    FileIngestResult(
-                        path=source_path,
-                        status="failed",
-                        document_id=document_id,
-                        error=str(exc),
-                    )
-                )
+        results = [self._process_one_file(Path(raw_path), tags or []) for raw_path in file_paths]
 
         self.vector_store.flush()
         elapsed_ms = (time.perf_counter() - started) * 1000
+
+        indexed_files = sum(1 for r in results if r.status == "indexed")
+        skipped_files = sum(1 for r in results if r.status == "skipped")
+        failed_files = sum(1 for r in results if r.status == "failed")
+        total_chunks = sum(r.chunk_count for r in results)
+
         if total_chunks > 500:
             logger.info(
                 "Imported %d chunks across %d files in %.0fms — "
                 "consider raising CHUNK_SIZE for fewer chunks with larger files.",
-                total_chunks,
-                indexed_files,
-                elapsed_ms,
+                total_chunks, indexed_files, elapsed_ms,
             )
         return IngestSummary(
             total_files=len(file_paths),
@@ -341,6 +240,100 @@ class IngestionEngine:
             elapsed_ms=elapsed_ms,
             results=results,
         )
+
+    def _process_one_file(self, path: Path, tags: list[str]) -> FileIngestResult:
+        """处理单个文件：检查→提取→分块→嵌入→持久化→更新 manifest。"""
+        source_path = self._display_path(path)
+        document_id = build_document_id(source_path)
+
+        skip_result = self._skip_missing_or_unsupported(path, source_path, document_id)
+        if skip_result:
+            return skip_result
+
+        try:
+            file_bytes = path.read_bytes()
+            content_hash = sha256_bytes(file_bytes)
+            existing = self.manifest.find_by_path(source_path)
+
+            skip_hash = self._skip_unchanged(existing, content_hash, source_path, document_id)
+            if skip_hash:
+                return skip_hash
+
+            text = self._extract_text(path, file_bytes, path.suffix.lower())
+            normalized = normalize_text(text)
+            if not normalized:
+                raise ValueError("File is empty after normalization")
+
+            if existing:
+                self.vector_store.delete_by_document_id(document_id)
+
+            chunks = self._build_chunks(
+                text=normalized, path=path, source_path=source_path,
+                document_id=document_id, content_hash=content_hash, tags=tags,
+            )
+            self._embed_and_store(chunks)
+            self._write_manifest(source_path, path, document_id, content_hash, chunks, existing, tags)
+
+            return FileIngestResult(
+                path=source_path, status="indexed",
+                document_id=document_id, chunk_count=len(chunks),
+            )
+        except Exception as exc:
+            self.manifest.mark_failed(source_path, str(exc), document_id=document_id)
+            return FileIngestResult(
+                path=source_path, status="failed",
+                document_id=document_id, error=str(exc),
+            )
+
+    def _skip_missing_or_unsupported(self, path: Path, source_path: str, document_id: str) -> FileIngestResult | None:
+        """检查文件是否存在、扩展名是否支持。返回 skip/fail 结果，或 None 表示可继续。"""
+        if not path.exists() or not path.is_file():
+            self.manifest.mark_failed(source_path, "File does not exist", document_id=document_id)
+            return FileIngestResult(path=source_path, status="failed", document_id=document_id, error="File does not exist")
+
+        if path.suffix.lower() not in set(self.config.supported_extensions):
+            return FileIngestResult(
+                path=source_path, status="skipped", document_id=document_id,
+                error=f"Unsupported file type: {path.suffix.lower()}",
+            )
+        return None
+
+    def _skip_unchanged(self, existing: dict[str, Any] | None, content_hash: str, source_path: str, document_id: str) -> FileIngestResult | None:
+        """检查文件内容是否未变。未变时返回 skip 结果，否则返回 None。"""
+        if existing and existing.get("content_hash") == content_hash and existing.get("status") == "indexed":
+            return FileIngestResult(
+                path=source_path, status="skipped", document_id=document_id,
+                chunk_count=existing.get("chunk_count", 0),
+            )
+        return None
+
+    def _embed_and_store(self, chunks: list[ChunkRecord]) -> None:
+        """为所有 chunk 生成嵌入并写入 vector store。"""
+        embeddings = self._embed_chunks([chunk.text for chunk in chunks])
+        for chunk, embedding in zip(chunks, embeddings):
+            chunk.embedding = embedding
+        self.vector_store.upsert_chunks(chunks)
+
+    def _write_manifest(self, source_path: str, path: Path, document_id: str, content_hash: str,
+                        chunks: list[ChunkRecord], existing: dict[str, Any] | None, tags: list[str]) -> None:
+        """将索引结果写入 manifest。"""
+        now = utc_now_iso()
+        record = {
+            "document_id": document_id,
+            "source_path": source_path,
+            "file_name": path.name,
+            "file_ext": path.suffix.lower(),
+            "content_hash": content_hash,
+            "mtime": path.stat().st_mtime,
+            "size_bytes": path.stat().st_size,
+            "chunk_count": len(chunks),
+            "tags": tags,
+            "status": "indexed",
+            "created_at": existing.get("created_at", now) if existing else now,
+            "updated_at": now,
+            "last_error": None,
+        }
+        self.manifest.upsert_document(record)
 
     def rebuild_index(self, force: bool = False) -> IngestSummary:
         import logging as _logging

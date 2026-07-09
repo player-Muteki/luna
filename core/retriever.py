@@ -168,7 +168,7 @@ class HybridRetriever:
             rewritten = self.query_rewriter.rewrite(normalized, chat_history)
             if rewritten:
                 return rewritten
-        if self._needs_history_context(normalized) and chat_history:
+        if self._is_short_or_deictic_query(normalized) and chat_history:
             last_user = self._last_user_message(chat_history)
             if last_user:
                 return f"{last_user} {normalized}"
@@ -216,7 +216,7 @@ class HybridRetriever:
         # such as the vector store).
         _token_cache: dict[int, list[str]] = {}
         for record in records:
-            _token_cache[id(record)] = tokenize(self._record_haystack(record))
+            _token_cache[id(record)] = tokenize(self._searchable_text(record))
 
         idf, avgdl = self._get_or_build_idf(records)
 
@@ -367,7 +367,7 @@ class HybridRetriever:
         df: dict[str, int] = {}
         total_dl = 0
         for record in records:
-            haystack = self._record_haystack(record)
+            haystack = self._searchable_text(record)
             tokens = tokenize(haystack)
             total_dl += len(tokens)
             seen = set(tokens)
@@ -406,7 +406,7 @@ class HybridRetriever:
         if token_cache is not None:
             tokens = token_cache.get(id(record))
         if tokens is None:
-            tokens = tokenize(self._record_haystack(record))
+            tokens = tokenize(self._searchable_text(record))
 
         if not tokens:
             return 0.0
@@ -427,8 +427,8 @@ class HybridRetriever:
         return score
 
     @staticmethod
-    def _record_haystack(record: dict[str, Any]) -> str:
-        """Build the haystack string for a record (text + metadata fields)."""
+    def _searchable_text(record: dict[str, Any]) -> str:
+        """将记录拼接成可搜索文本（text + metadata 字段）。"""
         text = record.get("text", "")
         metadata = record.get("metadata", {})
         return " ".join(
@@ -440,7 +440,7 @@ class HybridRetriever:
             ])
         )
 
-    def _needs_history_context(self, query: str) -> bool:
+    def _is_short_or_deictic_query(self, query: str) -> bool:
         compact = query.strip()
         return len(compact) <= 12 or any(hint in compact for hint in SHORT_QUERY_HINTS)
 
