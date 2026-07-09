@@ -212,10 +212,6 @@ class WorkspaceRuntime:
     def co_dir(self) -> Path:
         return self._ctx.co_dir
 
-    def save_config(self) -> None:
-        """委托给 ProjectContext.save_config()。"""
-        self._ctx.save_config()
-
     def scan_files(self, subdir: str | None = None) -> list[dict[str, Any]]:
         return self._ctx.scan_files(subdir=subdir)
 

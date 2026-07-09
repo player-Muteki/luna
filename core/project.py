@@ -231,16 +231,13 @@ class ProjectContext:
 
         调用前需先设置好 llm 和 embedding_model。
         """
-        from core.ingest import IngestionEngine, VectorStore, DocumentManifest
+        from core.ingest import IngestionEngine, VectorStore
         from core.retriever import HybridRetriever
         from core.generator import RAGGenerator
         from core.chat_engine import ChatEngine
 
         vectorstore = VectorStore(self.chunks_path)
         self.vectorstore = vectorstore
-
-        manifest = DocumentManifest(self.manifest_path)
-        self.manifest = manifest
 
         self.ingest_engine = IngestionEngine(
             config=self.config,

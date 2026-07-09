@@ -1,5 +1,21 @@
 # Changelog
 
+## [v0.0.12] - 2026-07-09
+
+### ♻️ Refactor
+- 移除 `WorkspaceRuntime` 中重复的 `save_config()` 方法定义
+- 清理 `ProjectContext.setup_engines()` 中废弃的 `DocumentManifest` 重复构造
+- `IngestionEngine._display_path` 改用 `self.root` 替代 `Path.cwd()`，消除路径歧义
+
+### 🧪 Testing
+- 代码审查全面覆盖：架构、代码质量、测试、前端、潜在 Bug
+- 修复若干代码异味（重复方法、冗余变量、命名歧义）
+
+### 🔧 Maintenance
+- 版本号更新至 v0.0.12
+
+---
+
 ## [v0.0.11] - 2026-07-09
 
 ### ♻️ Refactor
@@ -190,6 +206,7 @@
 
 ---
 
+[v0.0.12]: https://github.com/player-Muteki/co-thinker/releases/tag/v0.0.12
 [v0.0.11]: https://github.com/player-Muteki/co-thinker/releases/tag/v0.0.11
 [v0.0.10]: https://github.com/player-Muteki/co-thinker/releases/tag/v0.0.10
 [v0.0.6]: https://github.com/player-Muteki/co-thinker/releases/tag/v0.0.6

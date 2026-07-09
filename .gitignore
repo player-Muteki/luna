@@ -23,5 +23,8 @@ build/
 web/node_modules/
 web/.next/
 
+# Local pip packages (installed via pip install --user)
+.local-pkgs/
+
 # OS
 .DS_Store

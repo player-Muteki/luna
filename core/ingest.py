@@ -534,6 +534,6 @@ class IngestionEngine:
 
     def _display_path(self, path: Path) -> str:
         try:
-            return str(path.relative_to(Path.cwd()))
+            return str(path.relative_to(self.root))
         except ValueError:
             return str(path)
