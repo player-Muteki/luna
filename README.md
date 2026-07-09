@@ -13,6 +13,8 @@
 - **RAG 答案生成** — 大模型 + 检索上下文，支持多轮对话连贯性
 - **多轮对话管理** — 会话持久化、历史上下文维护
 - **可视化交互界面** — FastAPI 后端 + Next.js 前端双栏/三栏布局
+- **模型选择** — 聊天输入框和设置页支持切换模型（自动拉取 API 可用模型列表）
+- **配置管理** — Web 设置页可视化修改模型、API Key、Base URL 等配置
 - **CLI 工具链** — 一键初始化、启动、扫描、问答
 
 
@@ -86,13 +88,15 @@ co-thinker/
 ├── api/                    # FastAPI 后端服务
 │   ├── server.py           # 应用入口与路由注册
 │   ├── deps.py             # 依赖注入
-│   └── routes/             # API 路由（chat / files / ingest / sessions）
+│   └── routes/             # API 路由（chat / config / files / ingest / sessions）
 ├── core/                   # 核心业务逻辑
-│   ├── chat_engine.py      # 对话引擎
+│   ├── chat_workflow.py    # 聊天工作流引擎
 │   ├── generator.py        # 答案生成（LLM 调用）
 │   ├── retriever.py        # 混合检索（向量 + BM25）
 │   ├── ingest.py           # 文档导入与索引
 │   ├── parser.py           # 文档解析（PDF/DOCX/PPTX/文本）
+│   ├── file_catalog.py     # 文件目录索引管理
+│   ├── runtime.py          # 运行时统一入口（WorkspaceRuntime）
 │   └── project.py          # 项目上下文与配置管理
 ├── web/                    # Next.js 前端
 │   ├── app/                # 页面路由

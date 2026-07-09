@@ -1,5 +1,29 @@
 # Changelog
 
+## [v0.0.11] - 2026-07-09
+
+### ♻️ Refactor
+- 应用 Clean Code 改进：`cli.py`、`core/file_catalog.py`、`core/generator.py`、`core/ingest.py`、`core/retriever.py` 代码精简与质量提升
+
+### ✨ Features
+- 新增设置页面（`/settings`），支持可视化修改模型、API Key、Base URL 等配置
+- 聊天输入框新增模型选择器下拉菜单
+- 侧边栏导航增加设置入口
+- 文件管理页面增加全部索引/取消索引操作
+
+### 🐛 Bug Fixes
+- 修复 `get_api_key()` 因 `WorkspaceRuntime` vs `ProjectContext` 类型不匹配导致的 AttributeError
+  - `/api/config` 和 `/api/models` 接口恢复正常，模型列表可正确加载
+- 修复 Vercel 部署时的 `nextConfig` 序列化错误
+
+### 🎨 UI
+- `ChatComposer.tsx` 重构：模型选择器、本地存储持久化、发送逻辑优化
+- `ProjectSidebar.tsx` 新增设置导航项
+- `globals.css`：暗色主题、自定义滚动条、设置页面样式统一
+- `page.tsx`（文件管理）：批量操作按钮、状态管理优化
+
+---
+
 ## [v0.0.10] - 2026-07-08
 
 ### ♻️ Refactor
@@ -158,6 +182,8 @@
 
 ---
 
+[v0.0.11]: https://github.com/player-Muteki/co-thinker/releases/tag/v0.0.11
+[v0.0.10]: https://github.com/player-Muteki/co-thinker/releases/tag/v0.0.10
 [v0.0.6]: https://github.com/player-Muteki/co-thinker/releases/tag/v0.0.6
 [v0.0.5]: https://github.com/player-Muteki/co-thinker/releases/tag/v0.0.5
 [v0.0.4]: https://github.com/player-Muteki/co-thinker/releases/tag/v0.0.4
