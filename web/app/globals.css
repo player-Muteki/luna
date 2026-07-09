@@ -108,11 +108,66 @@ button:disabled {
 .dark {
   --tw-prose-invert-code: var(--accent);
 }
-/* 暗色适配 highlight.js */
+/* ==============================
+   Syntax Highlighting
+   自洽的双色系：深灰底 + 单一强调色
+   浅色：暖灰底 + 靛蓝强调
+   暗色：冷灰底 + 青蓝强调
+   ============================== */
+
+/* ── 浅色主题 ── */
+.hljs {
+  background: #f0f2f5;
+  color: #1e293b;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-type,
+.hljs-literal { color: #7c3aed; }            /* 紫：关键字 */
+.hljs-string,
+.hljs-title,
+.hljs-section,
+.hljs-attribute,
+.hljs-selector-id { color: #2563eb; }       /* 蓝：字符串/标题 */
+.hljs-number,
+.hljs-literal,
+.hljs-variable { color: #059669; }           /* 绿：数字 */
+.hljs-comment,
+.hljs-quote,
+.hljs-meta { color: #94a3b8; font-style: italic; } /* 灰斜：注释 */
+.hljs-built_in,
+.hljs-builtin-name { color: #d97706; }       /* 橙：内置函数 */
+.hljs-deletion { background: #fee2e2; }
+.hljs-addition { background: #dcfce7; }
+.hljs-attr { color: #7c3aed; }
+.hljs-params { color: #1e293b; }
+
+/* ── 暗色主题 ── */
 .dark .hljs {
-  background: #1e293b;
+  background: #0f172a;
   color: #e2e8f0;
 }
+.dark .hljs-keyword,
+.dark .hljs-selector-tag,
+.dark .hljs-type,
+.dark .hljs-literal { color: #a78bfa; }     /* 淡紫：关键字 */
+.dark .hljs-string,
+.dark .hljs-title,
+.dark .hljs-section,
+.dark .hljs-attribute,
+.dark .hljs-selector-id { color: #60a5fa; } /* 淡蓝：字符串/标题 */
+.dark .hljs-number,
+.dark .hljs-literal,
+.dark .hljs-variable { color: #34d399; }     /* 淡绿：数字 */
+.dark .hljs-comment,
+.dark .hljs-quote,
+.dark .hljs-meta { color: #64748b; font-style: italic; } /* 灰斜：注释 */
+.dark .hljs-built_in,
+.dark .hljs-builtin-name { color: #fbbf24; } /* 淡橙：内置函数 */
+.dark .hljs-deletion { background: #7f1d1d; }
+.dark .hljs-addition { background: #14532d; }
+.dark .hljs-attr { color: #a78bfa; }
+.dark .hljs-params { color: #e2e8f0; }
 
 /* Markdown 阅读视图 */
 .prose {
@@ -130,9 +185,12 @@ button:disabled {
 .prose pre {
   background: var(--surface-alt);
   border: 1px solid var(--surface-border);
-  border-radius: 8px;
+  border-radius: 0 0 8px 8px;
+  border-top: 0;
   font-size: 0.8125rem;
+  line-height: 1.6;
   overflow-x: auto;
+  margin-top: 0;
 }
 .prose code {
   font-size: 0.8125rem;
@@ -140,6 +198,8 @@ button:disabled {
   background: var(--surface-alt);
   padding: 0.125rem 0.375rem;
   border-radius: 4px;
+  border: 1px solid var(--surface-border);
+  color: var(--accent);
 }
 .prose :not(pre) > code::before,
 .prose :not(pre) > code::after {

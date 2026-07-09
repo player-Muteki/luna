@@ -138,8 +138,11 @@ function CopyButton({ content }: { content: string }) {
 /** Code block with a copy button overlay in the top-right corner. */
 function CodeBlock({ children, className }: { children?: React.ReactNode; className?: string }) {
   const [copied, setCopied] = useState(false);
-  // Extract code text from children for copying
+  const [showCopy, setShowCopy] = useState(false);
   const code = useRef<HTMLPreElement>(null);
+
+  // Extract language from className like "language-js" → "js"
+  const lang = className?.match(/language-(\w+)/)?.[1] ?? "";
 
   const handleCopy = async () => {
     const text = code.current?.textContent || "";
@@ -153,15 +156,30 @@ function CodeBlock({ children, className }: { children?: React.ReactNode; classN
   };
 
   return (
-    <div className="group relative">
+    <div
+      className="group relative"
+      onMouseEnter={() => setShowCopy(true)}
+      onMouseLeave={() => setShowCopy(false)}
+    >
+      {/* Header bar */}
+      <div className="flex items-center justify-between rounded-t-lg border border-b-0 border-[var(--surface-border)] bg-[var(--surface-alt)] px-3 py-1.5 text-xs text-[var(--text-muted)]">
+        <span className="font-mono uppercase tracking-wide">{lang || " "}</span>
+        <button
+          onClick={handleCopy}
+          onFocus={() => setShowCopy(true)}
+          onBlur={() => setShowCopy(false)}
+          className={`inline-flex items-center gap-1 rounded px-2 py-0.5 font-medium transition-all ${
+            showCopy
+              ? "bg-[var(--surface-panel)] text-[var(--text-secondary)] shadow-sm"
+              : "text-transparent"
+          }`}
+          title="复制代码"
+        >
+          {copied ? <Check size={13} /> : <Copy size={13} />}
+          <span>{copied ? "已复制" : "复制"}</span>
+        </button>
+      </div>
       <pre ref={code} className={className}>{children}</pre>
-      <button
-        onClick={handleCopy}
-        className="absolute top-2 right-2 rounded-md bg-[var(--surface-panel)] p-1.5 text-[var(--text-muted)] opacity-0 transition-opacity group-hover:opacity-100 hover:text-[var(--text-primary)]"
-        title="复制代码"
-      >
-        {copied ? <Check size={14} /> : <Copy size={14} />}
-      </button>
     </div>
   );
 }
@@ -234,7 +252,7 @@ export default function ChatMessages({
               <div className="prose prose-sm max-w-none">
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm, remarkMath]}
-                  rehypePlugins={[rehypeKatex, rehypeHighlight]}
+                  rehypePlugins={[rehypeKatex, [rehypeHighlight, { ignoreMissing: true, detect: false }]]}
                   components={{
                     pre: ({ className, children }) => (
                       <CodeBlock className={className}>{children}</CodeBlock>
