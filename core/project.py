@@ -35,10 +35,15 @@ def _default_exclude_patterns() -> list[str]:
 
 def _default_supported_extensions() -> list[str]:
     return [
-        ".c", ".cpp", ".cs", ".go", ".h", ".java", ".js", ".jsx",
-        ".md", ".mdx", ".php", ".py", ".rb", ".rs", ".ts", ".tsx", ".txt",
-        ".json", ".yaml", ".yml", ".toml", ".xml",
+        ".c", ".cpp", ".cs", ".go", ".h", ".hpp", ".java", ".js", ".jsx",
+        ".kt", ".kts", ".lua", ".php", ".pl", ".pm", ".py", ".rb", ".rs",
+        ".scala", ".swift", ".ts", ".tsx",
+        ".md", ".mdx", ".rst", ".tex", ".sty", ".cls", ".bib", ".bst",
+        ".html", ".htm", ".txt",
+        ".json", ".yaml", ".yml", ".toml", ".xml", ".ini", ".cfg", ".conf", ".env",
         ".csv", ".sql", ".log",
+        ".sh", ".bash", ".zsh", ".m", ".mm", ".r", ".R",
+        ".tf", ".cmake", ".gradle",
         ".pdf", ".docx", ".pptx",
     ]
 

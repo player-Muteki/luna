@@ -118,10 +118,20 @@ class PPTXParser(DocumentParser):
 
 
 TEXT_EXTENSIONS = frozenset({
-    ".c", ".cpp", ".cs", ".go", ".h", ".java", ".js", ".jsx",
-    ".md", ".mdx", ".php", ".py", ".rb", ".rs", ".ts", ".tsx", ".txt",
-    ".json", ".yaml", ".yml", ".toml", ".xml",
+    # Programming languages
+    ".c", ".cpp", ".cs", ".go", ".h", ".hpp", ".java", ".js", ".jsx",
+    ".kt", ".kts", ".lua", ".php", ".pl", ".pm", ".py", ".rb", ".rs",
+    ".scala", ".swift", ".ts", ".tsx",
+    # Documentation
+    ".md", ".mdx", ".rst", ".tex", ".sty", ".cls", ".bib", ".bst",
+    ".html", ".htm", ".txt",
+    # Data & config
+    ".json", ".yaml", ".yml", ".toml", ".xml", ".ini", ".cfg", ".conf", ".env",
     ".csv", ".sql", ".log",
+    # Shell & scripts
+    ".sh", ".bash", ".zsh", ".m", ".mm", ".r", ".R",
+    # Build & infra
+    ".tf", ".cmake", ".gradle",
 })
 
 

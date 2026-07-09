@@ -4,6 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { Bot, ChevronDown, ChevronRight, Copy, Check, UserRound } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import rehypeHighlight from "rehype-highlight";
 
 export interface RetrievalDetails {
   mode: string;
@@ -208,7 +211,10 @@ export default function ChatMessages({
             {/* Main content — markdown reading view */}
             {msg.role !== "user" && msg.content ? (
               <div className="prose prose-sm max-w-none">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm, remarkMath]}
+                  rehypePlugins={[rehypeKatex, rehypeHighlight]}
+                >
                   {msg.content}
                 </ReactMarkdown>
                 {streaming && msg === messages[messages.length - 1] && msg.role === "assistant" && (
