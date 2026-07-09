@@ -24,41 +24,36 @@
 
 一条命令安装 Co-Thinker：
 
-**方式一（推荐）**
+**方式一（推荐 — jsDelivr CDN，全球加速）**
 
 ```bash
-curl -sSL 'https://raw.githubusercontent.com/player-Muteki/co-thinker/refs/heads/main/install.sh' | bash
+curl -fsSL 'https://cdn.jsdelivr.net/gh/player-Muteki/co-thinker@main/install.sh' | bash
 ```
 
-**方式二（jsDelivr 国内镜像）**
+**方式二（GitHub Raw，备选）**
 
 ```bash
-curl -sSL 'https://cdn.jsdelivr.net/gh/player-Muteki/co-thinker@main/install.sh' | bash
+curl -fsSL 'https://raw.githubusercontent.com/player-Muteki/co-thinker/refs/heads/main/install.sh' | bash
 ```
 
 > macOS 默认的 bash 3.2 部分功能有限，推荐先升级 bash（`brew install bash`）或使用 zsh 执行。
+>
+> 注意：`curl` 命令中的 `-f`（`--fail`）确保在下载失败时不会将错误页面传给 bash。
 
 ### Windows
 
 以管理员身份打开 PowerShell，执行以下任一命令：
 
-**方式一（推荐 - 使用 curl.exe）：**
+**方式一（推荐 — jsDelivr CDN）：**
 
 ```powershell
-powershell -ExecutionPolicy Bypass -c "curl.exe -sSL -o $env:TEMP\install.ps1 https://raw.githubusercontent.com/player-Muteki/co-thinker/main/install.ps1; iex (Get-Content $env:TEMP\install.ps1 -Raw)"
+powershell -ExecutionPolicy Bypass -c "curl.exe -fsSL -o $env:TEMP\install.ps1 'https://cdn.jsdelivr.net/gh/player-Muteki/co-thinker@main/install.ps1'; iex (Get-Content $env:TEMP\install.ps1 -Raw)"
 ```
 
-**方式二（使用 irm - 先下载再执行）：**
+**方式二（GitHub Raw 备选）：**
 
 ```powershell
-powershell -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/player-Muteki/co-thinker/main/install.ps1 -OutFile $env:TEMP\co-thinker-install.ps1; iex (Get-Content $env:TEMP\co-thinker-install.ps1 -Raw)"
-```
-
-或手动下载后执行：
-
-```powershell
-curl.exe -sSL -o install.ps1 https://raw.githubusercontent.com/player-Muteki/co-thinker/main/install.ps1
-powershell -ExecutionPolicy Bypass -File install.ps1
+powershell -ExecutionPolicy Bypass -c "curl.exe -fsSL -o $env:TEMP\install.ps1 'https://raw.githubusercontent.com/player-Muteki/co-thinker/refs/heads/main/install.ps1'; iex (Get-Content $env:TEMP\install.ps1 -Raw)"
 ```
 
 ### 启动

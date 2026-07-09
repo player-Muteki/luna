@@ -31,22 +31,32 @@ else
 
     TMP_DIR=$(mktemp -d)
 
-    # Use GitHub API to find the latest release wheel URL
+    # Try to download wheel from GitHub Release via API
     if command -v curl &>/dev/null; then
-        API_OUT=$(curl -sSL --max-time 15 "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null || true)
+        API_OUT=$(curl -fsSL --max-time 15 "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null || true)
         if [[ -n "$API_OUT" ]]; then
-            # Extract the .whl asset download URL, tag name, and filename using grep/sed
             WHEEL_URL=$(echo "$API_OUT" | grep -o '"browser_download_url": *"[^"]*\.whl"' | head -1 | sed 's/.*: *"//;s/"//' || true)
             WHEEL_NAME=$(echo "$WHEEL_URL" | sed 's/.*\///' || true)
             TAG_NAME=$(echo "$API_OUT" | grep -o '"tag_name": *"[^"]*"' | head -1 | sed 's/.*: *"//;s/"//' || true)
             if [[ -n "$WHEEL_URL" && -n "$WHEEL_NAME" ]]; then
                 info "下载 wheel: $WHEEL_NAME (${TAG_NAME:-latest}) ..."
                 WHEEL_FILE="$TMP_DIR/$WHEEL_NAME"
-                curl -sSL --max-time 60 -o "$WHEEL_FILE" "$WHEEL_URL" && WHEEL_PATH="$WHEEL_FILE"
+                curl -fsSL --max-time 60 -o "$WHEEL_FILE" "$WHEEL_URL" && WHEEL_PATH="$WHEEL_FILE"
             fi
         fi
     fi
 
+    # Fallback: download wheel from jsDelivr CDN (more reliable, globally fast)
+    if [[ -z "$WHEEL_PATH" && -n "${TAG_NAME:-}" ]]; then
+        info "GitHub API 下载失败，尝试 jsDelivr CDN..."
+        WHEEL_FILE="$TMP_DIR/co-thinker.whl"
+        if curl -fsSL --max-time 60 -o "$WHEEL_FILE" \
+          "https://cdn.jsdelivr.net/gh/$REPO@$TAG_NAME/dist/co_thinker-${TAG_NAME#v}-py3-none-any.whl"; then
+            WHEEL_PATH="$WHEEL_FILE"
+        fi
+    fi
+
+    # Fallback: clone source and build locally
     if [[ -z "$WHEEL_PATH" ]]; then
         warn "GitHub Release 未找到 wheel，将从源码构建..."
         if command -v git &>/dev/null; then
@@ -58,11 +68,17 @@ else
             info "Downloading zip..."
             ZIP_URL="https://github.com/$REPO/archive/refs/heads/main.zip"
             if command -v curl &>/dev/null; then
-                curl -sSL --max-time 30 -o "/tmp/co-thinker.zip" "$ZIP_URL"
-            else
+                curl -fsSL --max-time 30 -o "/tmp/co-thinker.zip" "$ZIP_URL"
+            elif command -v wget &>/dev/null; then
                 wget -q --timeout=30 -O "/tmp/co-thinker.zip" "$ZIP_URL"
+            else
+                error "需要 curl 或 wget 来下载安装包"
+                exit 1
             fi
-            unzip -q "/tmp/co-thinker.zip" -d "/tmp/"
+            unzip -q "/tmp/co-thinker.zip" -d "/tmp/" 2>/dev/null || {
+                error "解压失败"
+                exit 1
+            }
             WHEEL_PATH="/tmp/co-thinker-main"
             info "Source extracted to $WHEEL_PATH"
         fi
