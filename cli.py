@@ -44,6 +44,54 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
 
 
+def _get_project_root() -> Path:
+    """向上搜索 pyproject.toml 定位项目源码根目录。
+
+    即使 cli.py 从 PYTHONPATH 目录（如 .local-pkgs/）加载，
+    也能正确找到源码根目录。回退到 __file__ 所在目录。
+    """
+    candidate = Path(__file__).resolve().parent
+    while candidate.parent != candidate:
+        if (candidate / "pyproject.toml").is_file():
+            return candidate
+        candidate = candidate.parent
+    return Path(__file__).resolve().parent
+
+
+def _get_web_dir() -> Path:
+    """返回 web 前端目录。
+
+    优先通过项目源码根目录定位（兼容 PYTHONPATH 干扰场景），
+    回退到 __file__ 所在目录的 web/。
+    """
+    root = _get_project_root()
+    web = root / "web"
+    if web.is_dir():
+        return web
+    return Path(__file__).resolve().parent / "web"
+
+
+def _sanitize_env(keep_pythonpath: bool = False) -> dict[str, str]:
+    """构建子进程环境变量。
+
+    清除继承的 PYTHONPATH 中指向项目内部的缓存路径（如 .local-pkgs），
+    避免子进程加载过时的原生扩展（如 Python 版本升级后的 .so 不兼容）。
+    """
+    env = os.environ.copy()
+    if not keep_pythonpath and "PYTHONPATH" in env:
+        pp = env["PYTHONPATH"]
+        cleaned = []
+        for p in pp.split(":"):
+            p_stripped = p.strip()
+            if p_stripped and ".local-pkgs" not in p_stripped:
+                cleaned.append(p_stripped)
+        if cleaned:
+            env["PYTHONPATH"] = ":".join(cleaned)
+        else:
+            env.pop("PYTHONPATH", None)
+    return env
+
+
 def _banner(version: str) -> str:
     return BANNER.format(version=version)
 
@@ -146,7 +194,7 @@ def start(
 
     os.environ.setdefault("CO_THINKER_ROOT", str(cwd))
 
-    web_dir = Path(__file__).resolve().parent / "web"
+    web_dir = _get_web_dir()
 
     # 检查 Next.js 前端是否存在
     if web_dir.exists():
@@ -319,7 +367,7 @@ def _start_full_stack(web_dir: Path, port: int, api_port: int, cwd: Path, open_b
         _start_api_only(api_port, cwd)
         return
 
-    env = os.environ.copy()
+    env = _sanitize_env(keep_pythonpath=False)
     env["NEXT_PUBLIC_API_URL"] = f"http://localhost:{api_port}"
     web_proc = _start_nextjs(web_dir, port, env)
 
@@ -440,13 +488,18 @@ def _add_node_paths() -> None:
 def _start_api_process(api_port: int, cwd: Path) -> subprocess.Popen:
     """启动 FastAPI 后端进程。"""
     typer.echo(f"[API] 启动 FastAPI 服务 (port {api_port})...")
-    env = os.environ.copy()
+    env = _sanitize_env(keep_pythonpath=False)
     env["CO_THINKER_ROOT"] = str(cwd)
 
-    # 开发模式：如果源码目录可写且与 site-packages 不一致，优先使用源码
-    _source_root = Path(__file__).resolve().parent
-    if _source_root.joinpath("pyproject.toml").exists():
-        env.setdefault("PYTHONPATH", str(_source_root))
+    # 如果运行在源码环境，确保 PYTHONPATH 指向项目根目录，
+    # 使 API 子进程能正确导入 core/、api/ 等模块。
+    source_root = _get_project_root()
+    if source_root.joinpath("pyproject.toml").exists():
+        existing = env.get("PYTHONPATH", "")
+        if existing:
+            env["PYTHONPATH"] = f"{source_root}:{existing}"
+        else:
+            env["PYTHONPATH"] = str(source_root)
 
     api_module = "api.server:app"
     return subprocess.Popen(
