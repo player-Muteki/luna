@@ -3,7 +3,7 @@
 #
 # Usage:
 #   powershell -ExecutionPolicy Bypass -File install.ps1
-#   powershell -ExecutionPolicy Bypass -File install.ps1 co_thinker-0.0.5-py3-none-any.whl
+#   powershell -ExecutionPolicy Bypass -File install.ps1 co_thinker-0.0.11-py3-none-any.whl
 # Online (no download):
 #   powershell -ExecutionPolicy Bypass -c "curl.exe -sSL URL | ..."
 
@@ -21,7 +21,7 @@ Write-Host "| |   / _ \ / _' | | __| '_ \| '_ \| |/ / _ \ '__|"
 Write-Host "| |__| (_) | (_| | | |_| | | | | |   <  __/ |"
 Write-Host " \____\___/ \__,_|  \__|_| |_|_| |_|_|\_\___|_|"
 Write-Host ""
-Write-Host "  Co-Thinker v0.0.5 - Windows Installer"
+Write-Host "  Co-Thinker v0.0.11 - Windows Installer"
 
 # ── Handle local .whl or auto-download ─────────────────────
 if ($WheelPath -and (Test-Path $WheelPath)) {
@@ -96,7 +96,31 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Info "Installed to $VenDir"
 
-# ── 3. Create PATH shortcut ──────────────────────────────
+# ── 3. Install web frontend dependencies ─────────────────────
+Write-Step "Installing web frontend dependencies"
+$WebDir = & $Python -c "import web, os; print(os.path.dirname(web.__file__))" 2>$null
+if ($WebDir -and (Test-Path (Join-Path $WebDir "package.json"))) {
+    # Check if npm is available
+    $NpmPath = Get-Command "npm" -ErrorAction SilentlyContinue
+    if ($NpmPath) {
+        Write-Info "Installing frontend dependencies (npm install)..."
+        Push-Location $WebDir
+        & npm install --quiet 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Info "Frontend dependencies installed"
+        } else {
+            Write-Warn "npm install failed, will retry on first 'co-thinker start'"
+        }
+        Pop-Location
+    } else {
+        Write-Warn "npm not found. Install Node.js (https://nodejs.org/) for best experience"
+        Write-Warn "First 'co-thinker start' will auto-install dependencies"
+    }
+} else {
+    Write-Info "Web frontend package not detected, skipping frontend setup"
+}
+
+# ── 4. Create PATH shortcut ──────────────────────────────
 Write-Step "Configuring system PATH"
 
 $BinDir = Join-Path $env:USERPROFILE ".local\bin"
@@ -109,7 +133,7 @@ $CoThinkerExe = Join-Path $VenDir "Scripts\co-thinker.exe"
 "@echo off`r`n`"$CoThinkerExe`" %*" | Set-Content -Path $BatPath
 Write-Info "Created shortcut: $BatPath"
 
-# ── 4. Check PATH ──────────────────────────────────────────
+# ── 5. Check PATH ──────────────────────────────────────────
 Write-Step "Checking PATH"
 $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
 if ($UserPath -notlike "*$BinDir*") {

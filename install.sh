@@ -6,7 +6,7 @@
 #   bash install.sh                    # install from GitHub Release (latest wheel)
 #   bash install.sh co_thinker-*.whl  # local .whl file
 # ============================================================
-set -euo pipefail
+set -euo pipefail 2>/dev/null || set -eu
 
 BOLD='\033[1m'
 GREEN='\033[0;32m'
@@ -172,7 +172,10 @@ echo "  co-thinker init"
 echo "  co-thinker start"
 echo ""
 
-# 立即生效：重新加载终端配置
+# 提示用户加载 PATH
 if [[ -n "$SHELL_RC" ]]; then
-    exec "$SHELL" -l
+    echo ""
+    warn "执行以下命令使 co-thinker 在当前终端生效："
+    echo "  source $SHELL_RC"
+    echo "  或直接运行: co-thinker"
 fi

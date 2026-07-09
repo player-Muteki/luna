@@ -20,23 +20,23 @@
 
 ## 安装
 
-### Linux
+### Linux / macOS
 
 一条命令安装 Co-Thinker：
 
-```bash
-curl -sSL https://api.github.com/repos/player-Muteki/co-thinker/contents/install.sh | python3 -c "import json,sys; print(json.load(sys.stdin)['content'])" | base64 -d > /tmp/co-thinker-install.sh && bash /tmp/co-thinker-install.sh
-```
-
-> 通过 GitHub API 获取脚本，避免 raw.githubusercontent.com CDN 限流问题。
-
-### macOS
-
-> macOS 默认的 bash 3.2 对 Unicode 支持有限，请使用以下命令（通过 `refs/heads/main` 路径绕过 CDN 缓存）：
+**方式一（推荐）**
 
 ```bash
-bash <(curl -sSL 'https://raw.githubusercontent.com/player-Muteki/co-thinker/refs/heads/main/install.sh')
+curl -sSL 'https://raw.githubusercontent.com/player-Muteki/co-thinker/refs/heads/main/install.sh' | bash
 ```
+
+**方式二（jsDelivr 国内镜像）**
+
+```bash
+curl -sSL 'https://cdn.jsdelivr.net/gh/player-Muteki/co-thinker@main/install.sh' | bash
+```
+
+> macOS 默认的 bash 3.2 部分功能有限，推荐先升级 bash（`brew install bash`）或使用 zsh 执行。
 
 ### Windows
 
@@ -79,7 +79,7 @@ co-thinker init
 co-thinker start
 ```
 
-> 首次使用前需编辑 `.env` 并填写 `DEEPSEEK_API_KEY`。
+> 首次运行 `co-thinker init` 时会提示填写 DeepSeek API Key，自动保存到 `~/.co-thinkerc`。
 
 ## 项目结构
 

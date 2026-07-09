@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "基于 RAG 的本地知识问答系统"
 requires-python = ">=3.10"
 readme = "README.md"
-license = "MIT"
+license = {text = "MIT"}
 authors = [
     {name = "Co-Thinker Contributors"},
 ]

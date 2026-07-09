@@ -360,15 +360,25 @@ def _install_frontend_deps(web_dir: Path) -> bool:
 
 
 def _start_nextjs(web_dir: Path, port: int, env: dict[str, str]) -> subprocess.Popen:
-    """启动 Next.js 前端进程。"""
+    """启动 Next.js 前端进程（生产模式，必要时自动构建）。"""
     next_build = web_dir / ".next"
     build_manifest = next_build / "build-manifest.json"
     if next_build.exists() and build_manifest.exists():
         typer.echo(f"[WEB] 启动 Next.js 生产服务器 (port {port})...")
         cmd = ["npx", "next", "start", "--port", str(port)]
     else:
-        typer.echo(f"[WEB] 启动 Next.js 开发服务器 (port {port})...")
-        cmd = ["npx", "next", "dev", "--port", str(port)]
+        typer.echo("[WEB] 未检测到构建产物，正在构建前端...")
+        typer.echo("[WEB] 首次构建可能需要 30-60 秒...")
+        build_result = subprocess.run(
+            ["npx", "next", "build"], cwd=str(web_dir),
+            capture_output=False,
+        )
+        if build_result.returncode != 0:
+            typer.echo("[ERROR] Next.js 构建失败，启动开发服务器作为降级...")
+            cmd = ["npx", "next", "dev", "--port", str(port)]
+        else:
+            typer.echo(f"[WEB] 构建完成，启动生产服务器 (port {port})...")
+            cmd = ["npx", "next", "start", "--port", str(port)]
     return subprocess.Popen(cmd, cwd=str(web_dir), env=env)
 
 
