@@ -161,6 +161,13 @@ export function rebuildIndex(): Promise<IngestResponse> {
   });
 }
 
+/** 清空所有索引 */
+export function clearAllIndex() {
+  return request<{ status: string }>("/api/ingest", {
+    method: "DELETE",
+  });
+}
+
 /** 删除指定文档的索引 */
 export function deleteDocument(
   documentId: string
@@ -170,7 +177,33 @@ export function deleteDocument(
   });
 }
 
+/** 获取配置 */
+export function getConfig() {
+  return request<{
+    api_key_configured: boolean;
+    base_url: string;
+    model: string;
+    top_k: number;
+    chunk_size: number;
+  }>("/api/config");
+}
+
+/** 保存配置 */
+export function saveConfig(data: {
+  api_key?: string;
+  base_url?: string;
+  model?: string;
+  top_k?: number;
+  chunk_size?: number;
+}) {
+  return request<{ status: string }>("/api/config", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
 // ── Sessions ─────────────────────────────────────────────────────
+
 
 export const sessions = {
   /** 获取会话列表 */

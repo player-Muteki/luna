@@ -64,10 +64,11 @@ async def chat_websocket(
                 continue
 
             session_id = msg.get("session_id", None)
+            request_model = msg.get("model", None)
 
             try:
                 workflow = ChatWorkflow(runtime)
-                async for event in _run_workflow(workflow, query_text, session_id):
+                async for event in _run_workflow(workflow, query_text, session_id, request_model):
                     await ws.send_json(_event_to_ws(event))
             except Exception as exc:
                 logger.exception("Chat error")
@@ -83,6 +84,7 @@ async def _run_workflow(
     workflow: ChatWorkflow,
     query: str,
     session_id: str | None,
+    model: str | None = None,
 ) -> Any:
     """在后台线程中运行 sync workflow.execute()，通过 asyncio.Queue 推送事件。"""
     loop = asyncio.get_event_loop()
@@ -90,7 +92,7 @@ async def _run_workflow(
 
     def _produce() -> None:
         try:
-            for event in workflow.execute(query, session_id):
+            for event in workflow.execute(query, session_id, model=model):
                 future = asyncio.run_coroutine_threadsafe(queue.put(event), loop)
                 future.result()
         except Exception as exc:

@@ -41,12 +41,13 @@ app.add_middleware(
 )
 
 # 注册路由
-from api.routes import files, ingest, sessions, chat
+from api.routes import files, ingest, sessions, chat, config
 
 app.include_router(files.router, prefix="/api")
 app.include_router(ingest.router, prefix="/api")
 app.include_router(sessions.router, prefix="/api")
 app.include_router(chat.router, prefix="/api")
+app.include_router(config.router, prefix="/api")
 
 
 @app.get("/")

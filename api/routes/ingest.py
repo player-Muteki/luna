@@ -108,3 +108,18 @@ async def delete_document(
         return {"status": "deleted", "path": result.path, "chunk_count": result.chunk_count}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.delete("/ingest")
+async def clear_all_index(
+    ctx: Any = Depends(get_project_context),
+):
+    """清空所有索引数据。"""
+    if not ctx.ingest_engine:
+        raise HTTPException(status_code=500, detail="Ingest engine not initialized")
+
+    ctx.ingest_engine.clear_index(clear_manifest=True)
+    if ctx.retriever:
+        ctx.retriever.invalidate_idf_cache()
+
+    return {"status": "cleared"}

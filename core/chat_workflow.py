@@ -39,6 +39,7 @@ class ChatWorkflow:
         self,
         query: str,
         session_id: str | None = None,
+        model: str | None = None,
     ) -> Generator[WorkflowEvent, None, None]:
         """执行一轮 RAG 问答，返回事件序列。
 
@@ -117,7 +118,7 @@ class ChatWorkflow:
         full_answer = ""
         reasoning_text = ""
         for event_type, content in ctx.generator.stream_generate(
-            query, retrieval_results, history
+            query, retrieval_results, history, model
         ):
             if event_type == "reasoning":
                 reasoning_text += content

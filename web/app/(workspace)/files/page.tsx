@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import FileTree from "@/components/files/FileTree";
-import { RefreshCw, CheckSquare, Square, Search, Database } from "lucide-react";
+import { RefreshCw, CheckSquare, Square, Search, Database, Trash2 } from "lucide-react";
 import { getFiles, ingestFiles, type FileItem } from "@/lib/api";
 
 export default function FilesPage() {
@@ -10,8 +10,18 @@ export default function FilesPage() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [indexing, setIndexing] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [autoIndex, setAutoIndex] = useState(true);
+
+  useEffect(() => {
+    const stored = localStorage.getItem("co-thinker-auto-index");
+    if (stored !== null) {
+      setAutoIndex(stored === "true");
+    }
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
@@ -33,6 +43,24 @@ export default function FilesPage() {
   useEffect(() => {
     loadFiles();
   }, [loadFiles]);
+
+  useEffect(() => {
+    if (autoIndex && files.length > 0 && !loading) {
+      const unindexedPaths = files.filter((f) => !f.is_dir && !f.is_indexed).map((f) => f.path);
+      if (unindexedPaths.length > 0) {
+        fetch("/api/ingest", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ paths: unindexedPaths }),
+        })
+          .then(() => {
+            loadFiles();
+            window.dispatchEvent(new CustomEvent("index-updated"));
+          })
+          .catch(() => {});
+      }
+    }
+  }, [autoIndex, files.length]);
 
   const toggleFile = (path: string) => {
     setSelected((prev) => {
@@ -67,9 +95,46 @@ export default function FilesPage() {
     }
   };
 
+  const handleClearAll = async () => {
+    if (!confirm("确定清空所有索引？此操作不可撤销。")) return;
+    setClearing(true);
+    try {
+      await fetch("/api/ingest", { method: "DELETE" });
+      await loadFiles();
+      setSelected(new Set());
+      window.dispatchEvent(new CustomEvent("index-updated"));
+    } catch (e) {
+      console.error("Clear index failed", e);
+    } finally {
+      setClearing(false);
+    }
+  };
+
   const indexedCount = files.filter((f) => f.is_indexed).length;
   const totalFileCount = files.filter((f) => !f.is_dir).length;
   const allSelected = selected.size === totalFileCount && totalFileCount > 0;
+  const someIndexed = indexedCount > 0;
+  const selectedIndexedFiles = files.filter((f) => !f.is_dir && f.is_indexed && selected.has(f.path));
+  const hasSelectedIndexed = selectedIndexedFiles.length > 0;
+
+  const handleDeleteSelected = async () => {
+    if (!hasSelectedIndexed) return;
+    setDeleting(true);
+    try {
+      await Promise.all(
+        selectedIndexedFiles.map((f) =>
+          fetch(`/api/ingest/${f.document_id}`, { method: "DELETE" })
+        )
+      );
+      await loadFiles();
+      setSelected(new Set());
+      window.dispatchEvent(new CustomEvent("index-updated"));
+    } catch (e) {
+      console.error("Delete selected index failed", e);
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   return (
     <div className="flex h-full flex-col p-6 lg:p-8">
@@ -83,8 +148,26 @@ export default function FilesPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
+            onClick={handleClearAll}
+            disabled={clearing || !someIndexed}
+            className="inline-flex h-10 items-center gap-2 rounded-md border border-[var(--danger)]/30 bg-[var(--danger-soft)] px-3 text-sm font-medium text-[var(--danger)] shadow-[var(--shadow-sm)] transition-colors hover:bg-[var(--danger)] hover:text-white disabled:opacity-40"
+            title="一键删除所有索引"
+          >
+            <Trash2 size={16} />
+            一键删除索引
+          </button>
+          <button
+            onClick={handleDeleteSelected}
+            disabled={deleting || !hasSelectedIndexed}
+            className="inline-flex h-10 items-center gap-2 rounded-md border border-[var(--danger)]/30 bg-[var(--danger-soft)] px-3 text-sm font-medium text-[var(--danger)] shadow-[var(--shadow-sm)] transition-colors hover:bg-[var(--danger)] hover:text-white disabled:opacity-40"
+            title="删除选中文件的索引"
+          >
+            <Trash2 size={16} />
+            {deleting ? "删除中..." : `删除索引 ${selectedIndexedFiles.length || ""}`.trim()}
+          </button>
+          <button
             onClick={loadFiles}
-            disabled={loading || indexing}
+            disabled={loading || indexing || clearing || deleting}
             className="inline-flex h-10 items-center gap-2 rounded-md border border-[var(--surface-border)] bg-[var(--surface-panel)] px-3 text-sm font-medium text-[var(--text-secondary)] shadow-[var(--shadow-sm)] transition-colors hover:bg-[var(--surface-alt)] disabled:opacity-50"
           >
             <RefreshCw size={16} className={loading ? "animate-spin" : ""} />

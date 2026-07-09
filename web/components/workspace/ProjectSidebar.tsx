@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Trash2,
   Database,
+  Settings,
 } from "lucide-react";
 import { getProjectInfo, sessions as sessionsApi, type ProjectInfo } from "@/lib/api";
 
@@ -112,7 +113,7 @@ export default function ProjectSidebar({
       </div>
 
       {collapsed ? (
-        <nav className="flex flex-col gap-2 p-2">
+        <nav className="flex flex-col gap-2 p-2 flex-1">
           <Link
             href="/files"
             title="文件管理"
@@ -142,6 +143,19 @@ export default function ProjectSidebar({
           >
             <Plus size={18} />
           </button>
+          <div className="mt-auto">
+            <Link
+              href="/settings"
+              title="设置"
+              className={`grid h-10 w-10 place-items-center rounded-md transition-colors ${
+                pathname.includes("/settings")
+                  ? "bg-[var(--sidebar-active)] text-[var(--sidebar-fg)]"
+                  : inactiveNavClass
+              }`}
+            >
+              <Settings size={18} />
+            </Link>
+          </div>
         </nav>
       ) : (
         <>
@@ -229,6 +243,21 @@ export default function ProjectSidebar({
                 </div>
               )}
             </div>
+          </div>
+
+          {/* 底部设置入口 */}
+          <div className="border-t border-[var(--sidebar-divider)] px-2 py-2">
+            <Link
+              href="/settings"
+              className={`${navItemClass} ${
+                pathname.includes("/settings")
+                  ? "bg-[var(--sidebar-active)] text-[var(--sidebar-fg)]"
+                  : inactiveNavClass
+              }`}
+            >
+              <Settings size={16} />
+              <span>设置</span>
+            </Link>
           </div>
         </>
       )}

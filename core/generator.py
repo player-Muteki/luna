@@ -180,6 +180,7 @@ class RAGGenerator:
         query: str,
         retrieval_results: RetrievalResults,
         chat_history: list[dict[str, Any]] | None = None,
+        model: str | None = None,
     ) -> Iterable[tuple[str, str]]:
         """流式生成回答，每个事件为 (event_type, content) 元组。
 
@@ -198,9 +199,10 @@ class RAGGenerator:
 
         try:
             messages = self.build_messages(query, retrieval_results, chat_history)
+            effective_model = model or self.config.model
             response = _llm_call_with_retry(
                 self.llm,
-                model=self.config.model,
+                model=effective_model,
                 messages=messages,
                 temperature=self.config.temperature,
                 max_tokens=self.config.max_tokens,

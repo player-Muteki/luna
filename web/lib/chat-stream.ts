@@ -98,18 +98,18 @@ export class ChatStream {
   }
 
   /** 发送一条用户查询。 */
-  sendQuery(content: string): void {
+  sendQuery(content: string, model?: string): void {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       this.callbacks.onError?.("WebSocket 未连接");
       return;
     }
-    this.ws.send(
-      JSON.stringify({
-        type: "query",
-        content,
-        session_id: this.sessionId,
-      })
-    );
+    const payload: Record<string, unknown> = {
+      type: "query",
+      content,
+      session_id: this.sessionId,
+    };
+    if (model) payload.model = model;
+    this.ws.send(JSON.stringify(payload));
   }
 
   /** 主动断开连接。 */

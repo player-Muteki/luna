@@ -149,6 +149,30 @@ button:disabled {
   --tw-prose-invert-body: var(--text-primary);
 }
 
+/* Range input */
+input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  height: 14px;
+  width: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+input[type="range"]::-moz-range-thumb {
+  height: 14px;
+  width: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+input[type="range"]:focus {
+  outline: none;
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;

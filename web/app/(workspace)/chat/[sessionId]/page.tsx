@@ -112,12 +112,12 @@ export default function ChatSessionPage() {
   }, [sessionId, loadSession]);
 
   const sendMessage = useCallback(
-    (content: string) => {
+    (content: string, model?: string) => {
       const stream = streamRef.current;
       if (!stream) return;
 
       setStreaming(true);
-      stream.sendQuery(content);
+      stream.sendQuery(content, model);
     },
     []
   );
