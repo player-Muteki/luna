@@ -433,6 +433,11 @@ def _start_api_process(api_port: int, cwd: Path) -> subprocess.Popen:
     env = os.environ.copy()
     env["CO_THINKER_ROOT"] = str(cwd)
 
+    # 开发模式：如果源码目录可写且与 site-packages 不一致，优先使用源码
+    _source_root = Path(__file__).resolve().parent
+    if _source_root.joinpath("pyproject.toml").exists():
+        env.setdefault("PYTHONPATH", str(_source_root))
+
     api_module = "api.server:app"
     return subprocess.Popen(
         [

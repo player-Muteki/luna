@@ -192,6 +192,10 @@ class WorkspaceRuntime:
     def config(self) -> Any:
         return self._ctx.config
 
+    def save_config(self) -> None:
+        """持久化当前配置。"""
+        self._ctx.save_config()
+
     @property
     def root(self) -> Path:
         return self._ctx.root

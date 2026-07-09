@@ -10,10 +10,14 @@
 - 聊天输入框新增模型选择器下拉菜单
 - 侧边栏导航增加设置入口
 - 文件管理页面增加全部索引/取消索引操作
+- `DELETE /api/ingest` 新增清空所有索引端点
+- WebSocket 聊天支持 `model` 参数，前端可指定模型覆盖默认配置
 
 ### 🐛 Bug Fixes
 - 修复 `get_api_key()` 因 `WorkspaceRuntime` vs `ProjectContext` 类型不匹配导致的 AttributeError
   - `/api/config` 和 `/api/models` 接口恢复正常，模型列表可正确加载
+- 修复 `POST /api/config` 500 错误：`WorkspaceRuntime` 缺少 `save_config()` 方法
+- 修复 CORS 预检请求 400 错误：`allow_origins` 未包含 Web 前端端口 3001
 - 修复 Vercel 部署时的 `nextConfig` 序列化错误
 
 ### 🎨 UI
@@ -21,6 +25,10 @@
 - `ProjectSidebar.tsx` 新增设置导航项
 - `globals.css`：暗色主题、自定义滚动条、设置页面样式统一
 - `page.tsx`（文件管理）：批量操作按钮、状态管理优化
+
+### 🔧 Maintenance
+- `cli.py`：API 子进程自动检测开发环境并注入 `PYTHONPATH`
+- 重构 `WorkspaceRuntime`：向后兼容委托属性体系补全
 
 ---
 
