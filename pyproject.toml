@@ -12,7 +12,7 @@ license = {text = "MIT"}
 authors = [
     {name = "Co-Thinker Contributors"},
 ]
-keywords = ["rag", "knowledge-base", "qa", "streamlit", "deepseek"]
+keywords = ["rag", "knowledge-base", "qa", "deepseek"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -44,8 +44,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/your-org/co-thinker"
-Source = "https://github.com/your-org/co-thinker"
+Homepage = "https://github.com/player-Muteki/co-thinker"
+Source = "https://github.com/player-Muteki/co-thinker"
 
 [project.scripts]
 co-thinker = "cli:main"

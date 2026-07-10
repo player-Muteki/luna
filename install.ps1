@@ -21,7 +21,7 @@ Write-Host "| |   / _ \ / _' | | __| '_ \| '_ \| |/ / _ \ '__|"
 Write-Host "| |__| (_) | (_| | | |_| | | | | |   <  __/ |"
 Write-Host " \____\___/ \__,_|  \__|_| |_|_| |_|_|\_\___|_|"
 Write-Host ""
-Write-Host "  Co-Thinker v0.0.11 - Windows Installer"
+Write-Host "  Co-Thinker Installer"
 
 # ── Handle local .whl or auto-download ─────────────────────
 if ($WheelPath -and (Test-Path $WheelPath)) {
@@ -60,6 +60,9 @@ if ($WheelPath -and (Test-Path $WheelPath)) {
     Write-Info "Download complete"
 }
 
+# ── Extract wheel version ────────────────────────────────
+$WheelVersion = if ($WheelFile -match 'co_thinker-(\d+\.\d+\.\d+)-') { $matches[1] } else { "0.0.0" }
+
 # ── 1. Check Python ────────────────────────────────────────
 Write-Step "Checking Python"
 $Python = $null
@@ -78,23 +81,42 @@ if (-not $Python) {
     exit 1
 }
 
-# ── 2. Install to dedicated venv ───────────────────────────
+# ── 2. Install to dedicated venv (增量更新) ──────────────
 Write-Step "Installing Co-Thinker"
 
 $VenDir = Join-Path $env:USERPROFILE ".co-thinker"
-if (Test-Path $VenDir) {
-    Write-Warn "$VenDir exists, reinstalling"
-    Remove-Item -Recurse -Force $VenDir
-}
-
-& $Python -m venv $VenDir | Out-Null
 $Pip = Join-Path $VenDir "Scripts\pip.exe"
-& $Pip install $WheelFile
-if ($LASTEXITCODE -ne 0) {
-    Write-Error "Installation failed"
-    exit 1
+if (Test-Path $VenDir) {
+    # 获取已安装版本
+    try {
+        $InstalledVer = & "$VenDir\Scripts\python.exe" -c "from __version__ import __version__; print(__version__)" 2>$null
+    } catch {
+        $InstalledVer = "0.0.0"
+    }
+    Write-Info "已安装版本: $InstalledVer"
+    Write-Info "目标版本:   $WheelVersion"
+
+    if ($InstalledVer -eq $WheelVersion) {
+        Write-Info "已是最新版本，无需更新"
+    } else {
+        Write-Info "更新: $InstalledVer → $WheelVersion"
+        & $Pip install --upgrade $WheelFile 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "Update failed"
+            exit 1
+        }
+        Write-Info "更新完成"
+    }
+} else {
+    Write-Info "全新安装 Co-Thinker $WheelVersion ..."
+    & $Python -m venv $VenDir | Out-Null
+    & $Pip install $WheelFile 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Installation failed"
+        exit 1
+    }
+    Write-Info "已安装到 $VenDir"
 }
-Write-Info "Installed to $VenDir"
 
 # ── 3. Install web frontend dependencies ─────────────────────
 Write-Step "Installing web frontend dependencies"

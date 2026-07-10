@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncGenerator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+from __version__ import __version__
 
 logger = logging.getLogger(__name__)
 
@@ -27,14 +30,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 app = FastAPI(
     title="Co-Thinker API",
     description="工作目录绑定型 RAG 知识库系统 API",
-    version="0.1.0",
+    version=__version__,
     lifespan=lifespan,
 )
 
-# CORS — 允许 Next.js 开发服务器访问
+# CORS — 从环境变量读取，默认为 Next.js 开发/生产服务器地址
+_default_cors = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001"
+_cors_origins = os.getenv("CORS_ORIGINS", _default_cors).split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:3001", "http://127.0.0.1:3001"],
+    allow_origins=[o.strip() for o in _cors_origins if o.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -54,7 +59,7 @@ app.include_router(config.router, prefix="/api")
 async def root():
     return {
         "name": "Co-Thinker API",
-        "version": "0.1.0",
+        "version": __version__,
         "endpoints": {
             "GET /api/project": "项目信息",
             "GET /api/files": "文件列表",

@@ -203,6 +203,11 @@ class OpenAIEmbeddingModel:
             self.get_text_embedding("test")
             return True
         except Exception:
+            import logging as _log
+            _log.getLogger(__name__).warning(
+                "Embedding model %s at %s verification failed",
+                self.model_name, self.client.base_url,
+            )
             return False
 
     def get_text_embedding_batch(self, texts: list[str]) -> list[list[float]]:

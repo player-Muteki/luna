@@ -12,4 +12,4 @@ prune web/.next
 # 核心模块（已在 packages 中，但确保 sdist 完整）
 recursive-include core *.py
 recursive-include api *.py
-recursive-include app *.py
+

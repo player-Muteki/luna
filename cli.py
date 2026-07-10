@@ -37,9 +37,24 @@ BANNER = r"""
 app = typer.Typer(
     name="co-thinker",
     help="基于 RAG 的工作目录知识库系统",
-    no_args_is_help=True,
     add_completion=False,
+    invoke_without_command=True,
 )
+
+
+@app.callback(invoke_without_command=True)
+def main_callback(
+    ctx: typer.Context,
+    version: bool = typer.Option(False, "--version", "-V", help="显示版本信息", is_eager=True),
+) -> None:
+    """基于 RAG 的工作目录知识库系统"""
+    if version:
+        print(_banner(__version__))
+        raise typer.Exit()
+    if ctx.invoked_subcommand is None:
+        print(ctx.get_help())
+        raise typer.Exit()
+
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
@@ -296,9 +311,116 @@ def scan(
         typer.echo(f"  {status} {f['path']} ({_fmt_size(f['size'])})")
 
 
+def _npm_cmd() -> list[str]:
+    """返回跨平台的 npm 命令列表。"""
+    if sys.platform == "win32":
+        return ["npm.cmd"]
+    return ["npm"]
+
+
+def _npx_cmd() -> list[str]:
+    """返回跨平台的 npx 命令列表。"""
+    if sys.platform == "win32":
+        return ["npx.cmd"]
+    return ["npx"]
+
+
+@app.command()
+def upgrade(
+    yes: bool = typer.Option(False, "--yes", "-y", help="跳过确认提示"),
+) -> None:
+    """将 Co-Thinker 更新到最新版本"""
+    import json
+    import urllib.request
+    import urllib.error
+
+    print(_banner(__version__))
+
+    # 1. 获取当前版本
+    typer.echo(f"当前版本: {__version__}")
+
+    # 2. 获取线上最新版本
+    repo = "player-Muteki/co-thinker"
+    api_url = f"https://api.github.com/repos/{repo}/releases/latest"
+    typer.echo("[INFO] 正在检查更新...")
+
+    try:
+        req = urllib.request.Request(api_url, headers={"Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode())
+    except (urllib.error.URLError, json.JSONDecodeError, OSError) as e:
+        typer.echo(f"[ERROR] 无法获取最新版本信息: {e}")
+        raise typer.Exit(1)
+
+    latest_tag = data.get("tag_name", "")
+    latest_version = latest_tag.lstrip("v") if latest_tag else ""
+    if not latest_version:
+        typer.echo("[ERROR] 无法解析最新版本号")
+        raise typer.Exit(1)
+
+    # 获取 wheel 下载 URL
+    wheel_url = None
+    for asset in data.get("assets", []):
+        if asset.get("name", "").endswith(".whl"):
+            wheel_url = asset.get("browser_download_url")
+            break
+
+    typer.echo(f"最新版本: {latest_version}")
+
+    # 3. 比较版本号
+    from packaging.version import parse as parse_version
+    if parse_version(latest_version) <= parse_version(__version__):
+        typer.echo("[OK] 已是最新版本，无需更新")
+        raise typer.Exit()
+
+    typer.echo(f"[NEW] 发现新版本: {__version__} → {latest_version}")
+
+    if not wheel_url:
+        typer.echo("[ERROR] 未找到可下载的 wheel 文件")
+        raise typer.Exit(1)
+
+    # 4. 确认或跳过
+    if not yes:
+        if not typer.confirm("是否现在更新?", default=True):
+            typer.echo("[SKIP] 已取消")
+            raise typer.Exit()
+
+    # 5. 下载 wheel
+    typer.echo("[INFO] 正在下载最新版本...")
+    import tempfile
+    tmp_dir = tempfile.mkdtemp()
+    wheel_name = wheel_url.split("/")[-1]
+    wheel_path = Path(tmp_dir) / wheel_name
+
+    try:
+        urllib.request.urlretrieve(wheel_url, str(wheel_path))
+    except (urllib.error.URLError, OSError) as e:
+        typer.echo(f"[ERROR] 下载失败: {e}")
+        raise typer.Exit(1)
+
+    typer.echo(f"[OK] 下载完成: {wheel_name}")
+
+    # 6. pip install --upgrade
+    typer.echo("[INFO] 正在安装更新...")
+    result = subprocess.run(
+        [sys.executable, "-m", "pip", "install", "--upgrade", str(wheel_path)],
+        capture_output=True, text=True, timeout=120,
+    )
+    if result.returncode != 0:
+        typer.echo(f"[ERROR] 安装失败:\n{result.stderr}")
+        raise typer.Exit(1)
+
+    typer.echo("[OK] 更新完成！")
+    typer.echo(f"版本: {latest_version}")
+
+    # 清理临时文件
+    import shutil
+    shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
 @app.command()
 def version():
-    """显示版本与系统信息"""
+    """显示版本与系统信息（快捷方式：co-thinker --version）"""
     print(_banner(__version__))
 
     installed_path = Path(__file__).resolve().parent
@@ -358,6 +480,8 @@ def _write_global_config(api_key: str) -> None:
     }
     path = Path.home() / ".co-thinkerc"
     path.write_text("# Co-Thinker Global Configuration\n" + tomli_w.dumps(config), encoding="utf-8")
+    if sys.platform != "win32":
+        os.chmod(path, 0o600)
 
 
 def _start_full_stack(web_dir: Path, port: int, api_port: int, cwd: Path, open_browser: bool = True) -> None:
@@ -407,7 +531,7 @@ def _install_frontend_deps(web_dir: Path) -> bool:
     if node_modules.exists():
         return True
     typer.echo("[WEB] 正在安装前端依赖 (npm install)...")
-    result = subprocess.run(["npm", "install"], cwd=str(web_dir))
+    result = subprocess.run([*_npm_cmd(), "install"], cwd=str(web_dir))
     if result.returncode != 0:
         typer.echo("[ERROR] npm install 失败")
         return False
@@ -421,20 +545,20 @@ def _start_nextjs(web_dir: Path, port: int, env: dict[str, str]) -> subprocess.P
     build_manifest = next_build / "build-manifest.json"
     if next_build.exists() and build_manifest.exists():
         typer.echo(f"[WEB] 启动 Next.js 生产服务器 (port {port})...")
-        cmd = ["npx", "next", "start", "--port", str(port)]
+        cmd = [*_npx_cmd(), "next", "start", "--port", str(port)]
     else:
         typer.echo("[WEB] 未检测到构建产物，正在构建前端...")
         typer.echo("[WEB] 首次构建可能需要 30-60 秒...")
         build_result = subprocess.run(
-            ["npx", "next", "build"], cwd=str(web_dir),
+            [*_npx_cmd(), "next", "build"], cwd=str(web_dir),
             capture_output=False,
         )
         if build_result.returncode != 0:
             typer.echo("[ERROR] Next.js 构建失败，启动开发服务器作为降级...")
-            cmd = ["npx", "next", "dev", "--port", str(port)]
+            cmd = [*_npx_cmd(), "next", "dev", "--port", str(port)]
         else:
             typer.echo(f"[WEB] 构建完成，启动生产服务器 (port {port})...")
-            cmd = ["npx", "next", "start", "--port", str(port)]
+            cmd = [*_npx_cmd(), "next", "start", "--port", str(port)]
     return subprocess.Popen(cmd, cwd=str(web_dir), env=env)
 
 
@@ -463,12 +587,15 @@ def _start_api_only(api_port: int, cwd: Path) -> None:
 
 def _ensure_npm_available() -> bool:
     """检测并确保 npm 在 PATH 中可用。"""
-    if shutil.which("npm") is not None:
+    npm_cmd = _npm_cmd()[0]
+    if shutil.which(npm_cmd) is not None:
+        return True
+    if sys.platform == "win32" and shutil.which("npm") is not None:
         return True
     _add_node_paths()
 
     try:
-        subprocess.run(["npm", "--version"], capture_output=True, timeout=10, check=True)
+        subprocess.run([*_npm_cmd(), "--version"], capture_output=True, timeout=10, check=True)
         return True
     except (FileNotFoundError, subprocess.TimeoutExpired, subprocess.CalledProcessError):
         return False
@@ -476,15 +603,18 @@ def _ensure_npm_available() -> bool:
 
 def _add_node_paths() -> None:
     """将常见 Node.js 安装路径加入 PATH（如未包含）。"""
-    candidates = [
-        "/opt/homebrew/bin",
-        "/usr/local/bin",
-        os.path.expanduser("~/.nvm/versions/node/*/bin"),
-        # Windows 常见 Node.js 安装路径
-        os.path.expanduser("~\\AppData\\Roaming\\npm"),
-        os.path.expandvars("%ProgramFiles%\\nodejs"),
-        os.path.expandvars("%ProgramFiles(x86)%\\nodejs"),
-    ]
+    if sys.platform == "win32":
+        candidates = [
+            os.path.expanduser("~\\AppData\\Roaming\\npm"),
+            os.path.expandvars("%ProgramFiles%\\nodejs"),
+            os.path.expandvars("%ProgramFiles(x86)%\\nodejs"),
+        ]
+    else:
+        candidates = [
+            "/opt/homebrew/bin",
+            "/usr/local/bin",
+            os.path.expanduser("~/.nvm/versions/node/*/bin"),
+        ]
     for path in candidates:
         if "*" in path:
             import glob

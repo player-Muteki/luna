@@ -77,6 +77,15 @@ else
     fi
 fi
 
+# --- Extract wheel version ---
+WHEEL_VERSION=""
+if [[ -n "$WHEEL_PATH" && "$WHEEL_PATH" == *.whl ]]; then
+    WHEEL_VERSION=$(basename "$WHEEL_PATH" | sed -n 's/^co_thinker-\([0-9.]*\)-.*/\1/p')
+fi
+if [[ -z "$WHEEL_VERSION" ]]; then
+    WHEEL_VERSION="0.0.0"
+fi
+
 # --- 1. Check Python ---
 step "Checking Python"
 PYTHON=""
@@ -97,18 +106,30 @@ if [[ -z "$PYTHON" ]]; then
     exit 1
 fi
 
-# --- 2. Install to venv ---
+# --- 2. Install to venv (增量更新) ---
 step "Installing Co-Thinker"
 
 VENV_DIR="$HOME/.co-thinker"
 if [[ -d "$VENV_DIR" ]]; then
-    warn "Removing existing installation at $VENV_DIR"
-    rm -rf "$VENV_DIR"
-fi
+    # 获取已安装版本
+    INSTALLED_VER=$("$VENV_DIR/bin/python" -c "from __version__ import __version__; print(__version__)" 2>/dev/null || echo "0.0.0")
+    info "已安装版本: $INSTALLED_VER"
+    info "目标版本:   $WHEEL_VERSION"
 
-"$PYTHON" -m venv "$VENV_DIR"
-PYTHONPATH= "$VENV_DIR/bin/pip" install "$WHEEL_PATH" --quiet
-info "Installed to $VENV_DIR"
+    # 比较版本号（简单字符串比较，适用于语义化版本）
+    if [[ "$INSTALLED_VER" == "$WHEEL_VERSION" ]]; then
+        info "已是最新版本，无需更新"
+    else
+        info "更新: $INSTALLED_VER → $WHEEL_VERSION"
+        PYTHONPATH= "$VENV_DIR/bin/pip" install --upgrade "$WHEEL_PATH" --quiet
+        info "更新完成"
+    fi
+else
+    info "全新安装 Co-Thinker $WHEEL_VERSION ..."
+    "$PYTHON" -m venv "$VENV_DIR"
+    PYTHONPATH= "$VENV_DIR/bin/pip" install "$WHEEL_PATH" --quiet
+    info "已安装到 $VENV_DIR"
+fi
 
 # --- 3. Install frontend dependencies ---
 step "Installing web frontend dependencies"

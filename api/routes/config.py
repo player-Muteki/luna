@@ -10,8 +10,11 @@ from pydantic import BaseModel
 
 from api.deps import get_project_context
 
-router = APIRouter(tags=["config"])
+import logging
 
+logger = logging.getLogger(__name__)
+
+router = APIRouter(tags=["config"])
 
 class ConfigUpdate(BaseModel):
     api_key: str | None = None
@@ -54,7 +57,6 @@ async def list_models(
         fetched = [{"id": m.id, "name": m.id} for m in sorted(models, key=lambda x: x.id)]
         return {"models": fetched if fetched else fallback}
     except Exception as e:
-        logger = __import__("logging").getLogger(__name__)
         logger.warning("Failed to fetch models from %s: %s", base_url, e)
         return {"models": fallback}
 
@@ -89,7 +91,19 @@ async def test_connection(
         return {"status": "ok", "model": model, "elapsed_ms": elapsed}
     except Exception as e:
         elapsed = round((time.perf_counter() - start) * 1000)
-        return {"status": "error", "model": model, "elapsed_ms": elapsed, "error": str(e)}
+        # 过滤敏感信息，避免在 error 消息中泄露 API Key/URL
+        err_msg = str(e)
+        sanitized = err_msg
+        if req.api_key:
+            sanitized = sanitized.replace(req.api_key, "***")
+            import urllib.parse
+            encoded_key = urllib.parse.quote(req.api_key, safe="")
+            if encoded_key != req.api_key:
+                sanitized = sanitized.replace(encoded_key, "***")
+        if req.base_url and req.base_url in sanitized:
+            sanitized = sanitized.replace(req.base_url, "***")
+        logger.warning("Connection test failed: %s", sanitized)
+        return {"status": "error", "model": model, "elapsed_ms": elapsed, "error": sanitized}
 
 
 @router.post("/config")
@@ -112,7 +126,7 @@ async def save_config(
     if req.api_key is not None or req.base_url is not None:
         try:
             import tomli_w
-            GLOBAL_CONFIG_PATH = Path.home() / ".co-thinkerc"
+            from core.project import GLOBAL_CONFIG_PATH
             global_cfg = {}
             if GLOBAL_CONFIG_PATH.exists():
                 raw = GLOBAL_CONFIG_PATH.read_text(encoding="utf-8")
@@ -121,7 +135,7 @@ async def save_config(
                         import tomli
                         global_cfg = tomli.loads(raw)
                     except Exception:
-                        pass
+                        logger.warning("Failed to parse existing global config, starting fresh")
             if req.api_key is not None:
                 global_cfg.setdefault("auth", {})
                 global_cfg["auth"]["api_key"] = req.api_key

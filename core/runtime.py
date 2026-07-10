@@ -79,6 +79,7 @@ class WorkspaceRuntime:
             try:
                 ctx.llm = get_llm(ctx)
             except Exception:
+                logger.warning("Failed to initialize LLM, continuing without it")
                 pass
 
         # Embedding 模型（可能没有）
