@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bot, ChevronDown, ChevronRight, Copy, Check, UserRound } from "lucide-react";
+import { Bot, ChevronDown, ChevronRight, Copy, Check, UserRound, ThumbsUp, ThumbsDown, RefreshCw, Pencil } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -150,14 +150,50 @@ function CopyButton({ content }: { content: string }) {
   );
 }
 
+/** Code block with a copy button overlay in the top-right corner. */
+function CodeBlock({ children, className }: { children?: React.ReactNode; className?: string }) {
+  const [copied, setCopied] = useState(false);
+  // Extract code text from children for copying
+  const code = useRef<HTMLPreElement>(null);
+
+  const handleCopy = async () => {
+    const text = code.current?.textContent || "";
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard API not available
+    }
+  };
+
+  return (
+    <div className="group relative">
+      <pre ref={code} className={className}>{children}</pre>
+      <button
+        onClick={handleCopy}
+        className="absolute top-2 right-2 rounded-md bg-[var(--surface-panel)] p-1.5 text-[var(--text-muted)] opacity-0 transition-opacity group-hover:opacity-100 hover:text-[var(--text-primary)]"
+        title="复制代码"
+      >
+        {copied ? <Check size={14} /> : <Copy size={14} />}
+      </button>
+    </div>
+  );
+}
+
 export default function ChatMessages({
   messages,
   streaming,
+  onRegenerate,
+  onEdit,
 }: {
   messages: Message[];
   streaming: boolean;
+  onRegenerate?: () => void;
+  onEdit?: (content: string) => void;
 }) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const [feedback, setFeedback] = useState<Partial<Record<string, "like" | "dislike">>>({});
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -214,6 +250,11 @@ export default function ChatMessages({
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm, remarkMath]}
                   rehypePlugins={[rehypeKatex, rehypeHighlight]}
+                  components={{
+                    pre: ({ className, children }) => (
+                      <CodeBlock className={className}>{children}</CodeBlock>
+                    ),
+                  }}
                 >
                   {msg.content}
                 </ReactMarkdown>
@@ -230,16 +271,75 @@ export default function ChatMessages({
               </div>
             )}
 
-            {/* Footer: copy button + timestamp (assistant only) */}
+            {/* Footer: edit button (user only) */}
+            {msg.role === "user" && onEdit && msg.content && (
+              <div className="mt-2 flex justify-end">
+                <button
+                  onClick={() => onEdit(msg.content)}
+                  className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+                  title="编辑"
+                >
+                  <Pencil size={12} />
+                  编辑
+                </button>
+              </div>
+            )}
+
+            {/* Footer: action buttons + timestamp (assistant only) */}
             {msg.role === "assistant" && msg.content && (
               <div className="mt-3 flex items-center justify-between border-t border-[var(--surface-border)] pt-2">
-                <CopyButton content={msg.content} />
-                <span className="text-xs text-[var(--text-secondary)]">
-                  {new Date(msg.created_at).toLocaleTimeString("zh-CN", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </span>
+                <div className="flex items-center gap-0.5">
+                  <CopyButton content={msg.content} />
+                  {onRegenerate && (
+                    <button
+                      onClick={onRegenerate}
+                      className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-alt)] hover:text-[var(--text-primary)]"
+                      title="重新生成"
+                    >
+                      <RefreshCw size={12} />
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() =>
+                      setFeedback((prev) => ({
+                        ...prev,
+                        [msg.id]: prev[msg.id] === "like" ? undefined : "like",
+                      }))
+                    }
+                    className={`rounded-md p-1 transition-colors ${
+                      feedback[msg.id] === "like"
+                        ? "text-[var(--accent)]"
+                        : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                    }`}
+                    title="赞"
+                  >
+                    <ThumbsUp size={12} />
+                  </button>
+                  <button
+                    onClick={() =>
+                      setFeedback((prev) => ({
+                        ...prev,
+                        [msg.id]: prev[msg.id] === "dislike" ? undefined : "dislike",
+                      }))
+                    }
+                    className={`rounded-md p-1 transition-colors ${
+                      feedback[msg.id] === "dislike"
+                        ? "text-[var(--danger)]"
+                        : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                    }`}
+                    title="踩"
+                  >
+                    <ThumbsDown size={12} />
+                  </button>
+                  <span className="text-xs text-[var(--text-secondary)]">
+                    {new Date(msg.created_at).toLocaleTimeString("zh-CN", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                </div>
               </div>
             )}
           </div>

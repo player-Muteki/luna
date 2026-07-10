@@ -19,6 +19,9 @@ build/
 .vscode/
 .idea/
 
+# TypeScript build info
+*.tsbuildinfo
+
 # Node
 web/node_modules/
 web/.next/

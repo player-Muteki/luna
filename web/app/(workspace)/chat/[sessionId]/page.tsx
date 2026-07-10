@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import ChatMessages, { type Message } from "@/components/chat/ChatMessages";
-import ChatComposer from "@/components/chat/ChatComposer";
+import ChatComposer, { type SendOptions } from "@/components/chat/ChatComposer";
 import { MessageSquare, Wifi, WifiOff } from "lucide-react";
 import { ChatStream, type ConnectionStatus, type RetrievalDetails } from "@/lib/chat-stream";
 import { sessions, type SessionDetail } from "@/lib/api";
@@ -16,6 +16,7 @@ export default function ChatSessionPage() {
   const [streaming, setStreaming] = useState(false);
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatus>("disconnected");
+  const [editContent, setEditContent] = useState<string | null>(null);
 
   // Refs to track retrieval/reasoning state during streaming (avoids stale closures)
   const retrievalRef = useRef<RetrievalDetails | null>(null);
@@ -84,8 +85,15 @@ export default function ChatSessionPage() {
         retrievalRef.current = null;
         reasoningRef.current = "";
         streamStartedRef.current = false;
-        // Reload session to get proper IDs and persisted metadata
-        loadSession();
+        // Lightweight background refresh for header (title, count) without
+        // replacing messages to avoid flicker
+        sessions.get(sessionId).then((data) => {
+          setSession((prev) => {
+            if (!prev) return prev;
+            // Only update metadata, keep current messages intact
+            return { ...data, messages: prev.messages };
+          });
+        }).catch(() => {});
       },
 
       onError: (message) => {
@@ -160,17 +168,58 @@ export default function ChatSessionPage() {
   }, [streaming]);
 
   const sendMessage = useCallback(
-    (content: string, model?: string) => {
+    (content: string, options?: SendOptions) => {
       const stream = streamRef.current;
       if (!stream) return;
 
       streamStartedRef.current = false;
       typewriterBufferRef.current = "";
+
+      // Add user message to local state immediately (optimistic)
+      const userMessage: Message = {
+        id: `user-${Date.now()}`,
+        role: "user",
+        content,
+        created_at: new Date().toISOString(),
+      };
+      setSession((prev) => {
+        if (!prev) return prev;
+        return { ...prev, messages: [...prev.messages, userMessage] };
+      });
+
       setStreaming(true);
-      stream.sendQuery(content, model);
+      setEditContent(null);
+      stream.sendQuery(content, options?.model, { deepthink: options?.deepthink, search: options?.search });
     },
     []
   );
+
+  const handleRegenerate = useCallback(() => {
+    if (!session || streaming) return;
+    const stream = streamRef.current;
+    if (!stream) return;
+
+    const lastUserMsg = [...session.messages].reverse().find((m) => m.role === "user");
+    if (!lastUserMsg) return;
+
+    // Remove the last assistant message(s) after the last user message
+    const lastUserIdx = session.messages.lastIndexOf(lastUserMsg);
+    const trimmedMessages = session.messages.slice(0, lastUserIdx + 1);
+
+    setSession((prev) => {
+      if (!prev) return prev;
+      return { ...prev, messages: trimmedMessages };
+    });
+
+    setStreaming(true);
+    stream.sendQuery(lastUserMsg.content);
+  }, [session, streaming]);
+
+  const handleEdit = useCallback((content: string) => {
+    setEditContent(content);
+    // Scroll to the composer
+    window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+  }, []);
 
   const isConnected = connectionStatus === "connected";
 
@@ -207,6 +256,8 @@ export default function ChatSessionPage() {
           <ChatMessages
             messages={session.messages as Message[]}
             streaming={streaming}
+            onRegenerate={handleRegenerate}
+            onEdit={handleEdit}
           />
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-[var(--text-secondary)]">
@@ -218,6 +269,7 @@ export default function ChatSessionPage() {
         onSend={sendMessage}
         disabled={!isConnected || streaming}
         placeholder={streaming ? "正在生成回答..." : "输入你的问题..."}
+        editValue={editContent}
       />
     </div>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -10,8 +10,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Trash2,
+  Pencil,
   Database,
   Settings,
+  Check,
+  X,
 } from "lucide-react";
 import { getProjectInfo, sessions as sessionsApi, type ProjectInfo } from "@/lib/api";
 
@@ -32,17 +35,23 @@ export default function ProjectSidebar({
 }) {
   const [info, setInfo] = useState<ProjectInfo | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameInput, setRenameInput] = useState("");
+  const renameRef = useRef<HTMLInputElement>(null);
   const pathname = usePathname();
   const router = useRouter();
 
-  // Fetch project info and sessions on mount only — index-updated event
-  // handles refreshes after indexing operations.
+  const loadSessions = () => {
+    sessionsApi.list().then((d) => setSessions(d.sessions)).catch(() => {});
+  };
+
+  // Fetch project info and sessions on mount
   useEffect(() => {
     getProjectInfo().then(setInfo).catch(() => {});
   }, []);
 
   useEffect(() => {
-    sessionsApi.list().then((d) => setSessions(d.sessions)).catch(() => {});
+    loadSessions();
   }, []);
 
   // 监听索引更新事件，自动刷新统计
@@ -57,6 +66,17 @@ export default function ProjectSidebar({
   const createSession = async () => {
     try {
       const data = await sessionsApi.create();
+      // Optimistically add to local list
+      setSessions((prev) => [
+        {
+          id: data.id,
+          title: data.title,
+          message_count: 0,
+          is_current: true,
+          updated_at: new Date().toISOString(),
+        },
+        ...prev,
+      ]);
       router.push(`/chat/${data.id}`);
     } catch (e) {
       console.error(e);
@@ -74,6 +94,38 @@ export default function ProjectSidebar({
     } catch (e) {
       console.error(e);
     }
+  };
+
+  const startRenaming = (id: string, currentTitle: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setRenamingId(id);
+    setRenameInput(currentTitle);
+    // Focus input on next tick after render
+    setTimeout(() => renameRef.current?.focus(), 0);
+  };
+
+  const commitRename = async () => {
+    const id = renamingId;
+    if (!id) return;
+    const newTitle = renameInput.trim();
+    if (!newTitle) {
+      setRenamingId(null);
+      return;
+    }
+    try {
+      await sessionsApi.rename(id, newTitle);
+      setSessions((prev) =>
+        prev.map((s) => (s.id === id ? { ...s, title: newTitle } : s))
+      );
+    } catch (e) {
+      console.error(e);
+    }
+    setRenamingId(null);
+  };
+
+  const cancelRename = () => {
+    setRenamingId(null);
   };
 
   const formatDate = (iso: string) => {
@@ -213,29 +265,62 @@ export default function ProjectSidebar({
             </div>
             <div className="mt-1 space-y-1">
               {sessions.map((s) => (
-                <Link
-                  key={s.id}
-                  href={`/chat/${s.id}`}
-                  className={`group flex items-center justify-between gap-2 rounded-md px-3 py-2 text-sm transition-colors ${
-                    pathname.includes(s.id)
-                      ? "bg-[var(--sidebar-active)] text-[var(--sidebar-fg)]"
-                      : "text-[var(--sidebar-muted)] hover:bg-[var(--sidebar-hover)] hover:text-[var(--sidebar-fg)]"
-                  }`}
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="truncate font-medium">{s.title}</div>
-                    <div className="text-xs text-[var(--sidebar-muted)]">
-                      {s.message_count} 条消息 · {formatDate(s.updated_at)}
-                    </div>
-                  </div>
-                  <button
-                    onClick={(e) => deleteSession(s.id, e)}
-                    className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-[var(--danger)] opacity-0 transition-opacity hover:bg-white/10 group-hover:opacity-100"
-                    title="删除会话"
+                <div key={s.id} className="group flex items-center gap-1">
+                  <Link
+                    href={`/chat/${s.id}`}
+                    className={`flex flex-1 items-center justify-between gap-2 rounded-md px-3 py-2 text-sm transition-colors ${
+                      pathname.includes(s.id)
+                        ? "bg-[var(--sidebar-active)] text-[var(--sidebar-fg)]"
+                        : "text-[var(--sidebar-muted)] hover:bg-[var(--sidebar-hover)] hover:text-[var(--sidebar-fg)]"
+                    }`}
                   >
-                    <Trash2 size={13} />
-                  </button>
-                </Link>
+                    {renamingId === s.id ? (
+                      <div className="flex flex-1 items-center gap-1">
+                        <input
+                          ref={renameRef}
+                          value={renameInput}
+                          onChange={(e) => setRenameInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") commitRename();
+                            if (e.key === "Escape") cancelRename();
+                          }}
+                          onBlur={commitRename}
+                          onClick={(e) => e.stopPropagation()}
+                          className="min-w-0 flex-1 rounded border border-[var(--accent)] bg-[var(--surface-bg)] px-1.5 py-0.5 text-sm text-[var(--text-primary)] outline-none"
+                        />
+                      </div>
+                    ) : (
+                      <div
+                        className="flex-1 min-w-0"
+                        onDoubleClick={(e) => startRenaming(s.id, s.title, e)}
+                      >
+                        <div className="truncate font-medium">{s.title}</div>
+                        <div className="text-xs text-[var(--sidebar-muted)]">
+                          {s.message_count} 条消息 · {formatDate(s.updated_at)}
+                        </div>
+                      </div>
+                    )}
+
+                    {renamingId !== s.id && (
+                      <div className="flex shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={(e) => startRenaming(s.id, s.title, e)}
+                          className="grid h-7 w-7 place-items-center rounded-md text-[var(--sidebar-muted)] hover:bg-[var(--sidebar-hover)] hover:text-[var(--sidebar-fg)]"
+                          title="重命名"
+                        >
+                          <Pencil size={13} />
+                        </button>
+                        <button
+                          onClick={(e) => deleteSession(s.id, e)}
+                          className="grid h-7 w-7 place-items-center rounded-md text-[var(--danger)] hover:bg-white/10"
+                          title="删除会话"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    )}
+                  </Link>
+                </div>
               ))}
               {sessions.length === 0 && (
                 <div className="rounded-md border border-[var(--sidebar-divider)] px-3 py-4 text-sm text-[var(--sidebar-muted)]">

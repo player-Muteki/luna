@@ -98,7 +98,7 @@ export class ChatStream {
   }
 
   /** 发送一条用户查询。 */
-  sendQuery(content: string, model?: string): void {
+  sendQuery(content: string, model?: string, options?: { deepthink?: boolean; search?: boolean }): void {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       this.callbacks.onError?.("WebSocket 未连接");
       return;
@@ -109,6 +109,8 @@ export class ChatStream {
       session_id: this.sessionId,
     };
     if (model) payload.model = model;
+    if (options?.deepthink) payload.deepthink = true;
+    if (options?.search) payload.search = true;
     this.ws.send(JSON.stringify(payload));
   }
 
