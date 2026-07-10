@@ -165,7 +165,31 @@ else
     info "PATH already includes $BIN_DIR"
 fi
 
-# --- 6. Cleanup ---
+# --- 6. Clean up old co-thinker files in .local-pkgs ---
+step "Cleaning up old co-thinker files"
+# 如果 PYTHONPATH 中包含 .local-pkgs 目录，其中有老版本 co-thinker 文件，
+# 会导致 import cli 加载旧版。这里遍历清理。
+OLD_PYTHONPATH_DIRS=$(echo "${PYTHONPATH:-}" | tr ':' '\n' | grep '\.local-pkgs' | sort -u || true)
+if [[ -z "$OLD_PYTHONPATH_DIRS" ]]; then
+    # 找不到时也检查常见开发目录
+    for dir in "$HOME/code/co-thinker/.local-pkgs" "/tmp/co-thinker-main/.local-pkgs"; do
+        if [[ -d "$dir" ]]; then
+            OLD_PYTHONPATH_DIRS="$OLD_PYTHONPATH_DIRS
+$dir"
+        fi
+    done
+fi
+for dir in $OLD_PYTHONPATH_DIRS; do
+    if [[ -d "$dir" ]]; then
+        info "清理 $dir 中的旧 co-thinker 文件..."
+        rm -f "$dir/cli.py" "$dir/__version__.py" "$dir/config.py"
+        rm -rf "$dir/core" "$dir/api" "$dir/web"
+        rm -rf "$dir/co_thinker-"*.dist-info
+        info "  ✅ 已清理"
+    fi
+done
+
+# --- 7. Cleanup ---
 if [[ -n "${TMP_DIR:-}" && -d "$TMP_DIR" ]]; then
     rm -rf "$TMP_DIR"
 fi
