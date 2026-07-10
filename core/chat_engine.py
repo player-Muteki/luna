@@ -232,7 +232,7 @@ class ChatEngine:
         }
         tmp_path = self.storage_path.with_suffix(f"{self.storage_path.suffix}.tmp")
         tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        fd = os.open(tmp_path, os.O_RDONLY)
+        fd = os.open(tmp_path, os.O_RDWR)
         try:
             os.fsync(fd)
         finally:
