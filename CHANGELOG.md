@@ -1,5 +1,21 @@
 # Changelog
 
+## [v0.1.1] - 2026-07-10
+
+### ✨ Features
+- 新增 API 连通性测试按钮（设置页 API Key 旁），点击即可验证 API 供应商
+- 对话问答逐字逐句流式输出（打字机效果），不再一次性跳转
+
+### 🐛 Bug Fixes
+- 修复前端 API Key 保存闭包过期问题（输入的最后一位字符缺失）
+- 修复保存 API Key 后需重启服务才能生效的问题，现在自动重新初始化 LLM
+- 修复 `config.toml` 固化旧 `supported_extensions` 导致新增扩展名不生效
+
+### 🔧 Maintenance
+- 版本号更新至 v0.1.1
+
+---
+
 ## [v0.0.15] - 2026-07-10
 
 ### 🐛 Bug Fixes
