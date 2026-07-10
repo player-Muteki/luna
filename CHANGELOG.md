@@ -1,5 +1,20 @@
 # Changelog
 
+## [v0.2.0] - 2026-07-10
+
+### 🔧 Refactoring (Clean Code)
+- 新增自定义异常层次 (`CoThinkerError`, `ConfigError`, `LLMError`, `IngestError`, `RetrievalError`)
+- Feature Envy 修复：`get_api_key`/`get_llm`/`get_embedding_model` 从独立函数改为 `ProjectContext` 方法
+- 消除 `_load_global_config()` 重复读取（缓存到 `ProjectContext._global_config`）
+- `upgrade()` 拆分为 7 个命名子函数，消除 80 行长函数
+- `_split_text()` 提取 `_find_chunk_boundary()` / `_compute_next_start()` 静态方法
+- Flag 参数消除：`rebuild_index(force)` → `rebuild_index()` + `force_rebuild_index()`
+- `_write_manifest()` 参数从 7 个减少到 6 个
+- `ChatWorkflow.execute()` 中 8 段编号步骤注释 → 5 个提取方法
+- `generator.py` 中的 `LLMRetryError` 移至 `core.exceptions`
+
+---
+
 ## [v0.1.9] - 2026-07-10
 
 ### 🎨 UI
