@@ -195,7 +195,7 @@ class ProjectContext:
         self.vectordb_dir = self.co_dir / "vectordb"
         self.chunks_path = self.vectordb_dir / "chunks.json"
         self.manifest_path = self.vectordb_dir / "manifest.json"
-        self.sessions_path = self.co_dir / "sessions.jsonl"
+        self.sessions_path = self.co_dir / "sessions.json"
 
         self.config = ProjectConfig.load(self.config_path)
 

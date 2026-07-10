@@ -80,3 +80,38 @@ def test_list_conversations_exposes_preview_and_current_flag(tmp_path: Path) -> 
     assert items[0]["id"] == second.conversation_id
     assert items[0]["is_current"] is True
     assert items[0]["last_message_preview"] == "第二个问题"
+
+
+def test_batch_save_no_data_loss(tmp_path: Path) -> None:
+    """使用 save=False 批量添加消息后，只有最终 save() 才落盘。"""
+    storage = tmp_path / "chat_history.json"
+    engine = ChatEngine(storage)
+
+    engine.add_user_message("用户问题", save=False)
+    engine.add_assistant_message("助手回答", save=False)
+
+    # save=False 期间的消息不应出现在磁盘上
+    assert len(list(storage.parent.iterdir())) >= 1  # 初始创建时已有文件
+    restored = ChatEngine(storage)
+    assert len(restored.current_conversation.messages) == 0, "save=False 的消息不应落盘"
+
+    # 手动保存后应有数据
+    engine.save()
+    restored2 = ChatEngine(storage)
+    assert len(restored2.current_conversation.messages) == 2
+    assert restored2.current_conversation.messages[0].content == "用户问题"
+    assert restored2.current_conversation.messages[1].content == "助手回答"
+
+
+def test_batch_save_prevents_orphaned_message(tmp_path: Path) -> None:
+    """模拟中途崩溃场景：只执行了 add_user_message(save=False)，未执行
+    add_assistant_message → 磁盘上不应有孤立消息（save() 未被调用）。"""
+    storage = tmp_path / "chat_history.json"
+    engine = ChatEngine(storage)
+
+    engine.add_user_message("用户问题", save=False)
+
+    # 模拟崩溃：没有调用 add_assistant_message 和 save()
+    # 重新启动引擎后应只有初始空会话
+    restored = ChatEngine(storage)
+    assert len(restored.current_conversation.messages) == 0

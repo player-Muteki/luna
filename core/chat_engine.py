@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import threading
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -79,7 +81,7 @@ class ChatEngine:
         self.max_history_turns = max_history_turns
         self.current_id: str | None = None
         self.conversations: dict[str, Conversation] = {}
-        self._dirty = False
+        self._lock = threading.RLock()
         self.load()
 
     @property
@@ -89,95 +91,104 @@ class ChatEngine:
         return self.conversations[self.current_id]
 
     def create_conversation(self, title: str = "新对话", **metadata) -> Conversation:
-        conversation = Conversation(title=title, metadata=metadata)
-        self.conversations[conversation.conversation_id] = conversation
-        self.current_id = conversation.conversation_id
-        self._mark_dirty()
-        self.save()
-        return conversation
+        with self._lock:
+            conversation = Conversation(title=title, metadata=metadata)
+            self.conversations[conversation.conversation_id] = conversation
+            self.current_id = conversation.conversation_id
+            self.save()
+            return conversation
 
     def switch_conversation(self, conversation_id: str) -> bool:
-        if conversation_id not in self.conversations:
-            return False
-        self.current_id = conversation_id
-        self._mark_dirty()
-        self.save()
-        return True
+        with self._lock:
+            if conversation_id not in self.conversations:
+                return False
+            self.current_id = conversation_id
+            self.save()
+            return True
 
     def delete_conversation(self, conversation_id: str) -> bool:
-        if conversation_id not in self.conversations:
-            return False
-        self.conversations.pop(conversation_id)
-        if not self.conversations:
-            self.create_conversation()
-        elif self.current_id == conversation_id:
-            self.current_id = next(iter(self.conversations))
-        self._mark_dirty()
-        self.save()
-        return True
+        with self._lock:
+            if conversation_id not in self.conversations:
+                return False
+            self.conversations.pop(conversation_id)
+            if not self.conversations:
+                self.create_conversation()
+            elif self.current_id == conversation_id:
+                self.current_id = next(iter(self.conversations))
+            self.save()
+            return True
 
     def rename_conversation(self, conversation_id: str, title: str) -> bool:
-        conversation = self.conversations.get(conversation_id)
-        if conversation is None:
-            return False
-        conversation.title = title.strip() or conversation.title
-        conversation.updated_at = utc_now_iso()
-        self._mark_dirty()
-        self.save()
-        return True
+        with self._lock:
+            conversation = self.conversations.get(conversation_id)
+            if conversation is None:
+                return False
+            conversation.title = title.strip() or conversation.title
+            conversation.updated_at = utc_now_iso()
+            self.save()
+            return True
 
     def list_conversations(self) -> list[dict[str, Any]]:
-        items = []
-        for conversation in sorted(self.conversations.values(), key=lambda item: item.updated_at, reverse=True):
-            preview = conversation.messages[-1].content[:60] if conversation.messages else ""
-            items.append(
-                {
-                    "id": conversation.conversation_id,
-                    "title": conversation.title,
-                    "message_count": len(conversation.messages),
-                    "created_at": conversation.created_at,
-                    "updated_at": conversation.updated_at,
-                    "is_current": conversation.conversation_id == self.current_id,
-                    "last_message_preview": preview,
-                }
-            )
-        return items
+        with self._lock:
+            items = []
+            for conversation in sorted(self.conversations.values(), key=lambda item: item.updated_at, reverse=True):
+                preview = conversation.messages[-1].content[:60] if conversation.messages else ""
+                items.append(
+                    {
+                        "id": conversation.conversation_id,
+                        "title": conversation.title,
+                        "message_count": len(conversation.messages),
+                        "created_at": conversation.created_at,
+                        "updated_at": conversation.updated_at,
+                        "is_current": conversation.conversation_id == self.current_id,
+                        "last_message_preview": preview,
+                    }
+                )
+            return items
 
-    def add_user_message(self, content: str, **metadata) -> Message:
-        message = self.current_conversation.add_message("user", content, **metadata)
-        self._mark_dirty()
-        self.save()
-        return message
+    def add_user_message(self, content: str, save: bool = True, **metadata) -> Message:
+        with self._lock:
+            message = self.current_conversation.add_message("user", content, **metadata)
+            if save:
+                self.save()
+            return message
 
-    def add_assistant_message(self, content: str, **metadata) -> Message:
-        message = self.current_conversation.add_message("assistant", content, **metadata)
-        self._mark_dirty()
-        self.save()
-        return message
+    def add_assistant_message(self, content: str, save: bool = True, **metadata) -> Message:
+        with self._lock:
+            message = self.current_conversation.add_message("assistant", content, **metadata)
+            if save:
+                self.save()
+            return message
 
     def get_history(self, conversation_id: str | None = None, max_turns: int | None = None) -> list[dict[str, str]]:
-        conversation = self.current_conversation if conversation_id is None else self.conversations.get(conversation_id)
-        if conversation is None:
-            return []
-        return conversation.to_llm_history(max_turns or self.max_history_turns)
+        with self._lock:
+            conversation = self.current_conversation if conversation_id is None else self.conversations.get(conversation_id)
+            if conversation is None:
+                return []
+            return conversation.to_llm_history(max_turns or self.max_history_turns)
 
     def clear_history(self, conversation_id: str | None = None) -> None:
-        conversation = self.current_conversation if conversation_id is None else self.conversations.get(conversation_id)
-        if conversation is None:
-            return
-        conversation.messages = []
-        conversation.title = "新对话"
-        conversation.updated_at = utc_now_iso()
-        self._mark_dirty()
-        self.save()
+        with self._lock:
+            conversation = self.current_conversation if conversation_id is None else self.conversations.get(conversation_id)
+            if conversation is None:
+                return
+            conversation.messages = []
+            conversation.title = "新对话"
+            conversation.updated_at = utc_now_iso()
+            self.save()
 
     def load(self) -> None:
         if not self.storage_path.exists():
-            self.storage_path.parent.mkdir(parents=True, exist_ok=True)
-            self.conversations = {}
-            self.current_id = None
-            self.create_conversation()
-            return
+            old_path = self.storage_path.with_suffix(".jsonl")
+            if old_path.exists():
+                old_path.replace(self.storage_path)
+                # 迁移完成后继续往下读取新路径
+            else:
+                self.storage_path.parent.mkdir(parents=True, exist_ok=True)
+                self.conversations = {}
+                self.current_id = None
+                self.create_conversation()
+                return
 
         try:
             data = json.loads(self.storage_path.read_text(encoding="utf-8"))
@@ -202,13 +213,7 @@ class ChatEngine:
             self.current_id = next(iter(self.conversations))
             self.save()
 
-    def _mark_dirty(self) -> None:
-        self._dirty = True
-
     def save(self) -> None:
-        if not self._dirty:
-            return
-        self._dirty = False
         self.storage_path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
             "version": 1,
@@ -227,6 +232,11 @@ class ChatEngine:
         }
         tmp_path = self.storage_path.with_suffix(f"{self.storage_path.suffix}.tmp")
         tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        fd = os.open(tmp_path, os.O_RDONLY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
         tmp_path.replace(self.storage_path)
 
 

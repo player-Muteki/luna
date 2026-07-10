@@ -110,9 +110,9 @@ class ChatWorkflow:
             })
             return
 
-        # ── 5. 记录用户消息 ──────────────────────────────────────────
+        # ── 5. 记录用户消息（仅内存，暂不落盘）─────────────────────────
         if ctx.chat_engine:
-            ctx.chat_engine.add_user_message(query, mode="rag")
+            ctx.chat_engine.add_user_message(query, mode="rag", save=False)
 
         # ── 6. 流式生成 ──────────────────────────────────────────────
         full_answer = ""
@@ -127,14 +127,14 @@ class ChatWorkflow:
                 full_answer += content
                 yield WorkflowEvent("chunk", {"content": content})
 
-        # ── 7. 持久化助手消息 ────────────────────────────────────────
+        # ── 7. 持久化助手消息 + 一次性落盘 ────────────────────────────
         metadata: dict[str, Any] = {}
         if retrieval_details:
             metadata["retrieval_details"] = retrieval_details
         if reasoning_text:
             metadata["reasoning_text"] = reasoning_text
         if ctx.chat_engine:
-            ctx.chat_engine.add_assistant_message(full_answer, **metadata)
+            ctx.chat_engine.add_assistant_message(full_answer, save=True, **metadata)
 
         # ── 8. 完成 ──────────────────────────────────────────────────
         references = retrieval_results.to_sources()[:10]
