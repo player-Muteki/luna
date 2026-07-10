@@ -51,7 +51,7 @@ class Conversation:
         message = Message(role=role, content=content, metadata=metadata)
         self.messages.append(message)
         self.updated_at = utc_now_iso()
-        if self.title == "新对话" and role == "user":
+        if self.title in ("", "新对话") and role == "user":
             self.title = auto_title_from_text(content)
         return message
 
@@ -111,9 +111,7 @@ class ChatEngine:
             if conversation_id not in self.conversations:
                 return False
             self.conversations.pop(conversation_id)
-            if not self.conversations:
-                self.create_conversation()
-            elif self.current_id == conversation_id:
+            if self.current_id == conversation_id:
                 self.current_id = next(iter(self.conversations))
             self.save()
             return True
@@ -187,7 +185,6 @@ class ChatEngine:
                 self.storage_path.parent.mkdir(parents=True, exist_ok=True)
                 self.conversations = {}
                 self.current_id = None
-                self.create_conversation()
                 return
 
         try:
@@ -197,7 +194,6 @@ class ChatEngine:
             self.storage_path.replace(broken_path)
             self.conversations = {}
             self.current_id = None
-            self.create_conversation()
             return
 
         self.current_id = data.get("current_id")
@@ -207,7 +203,6 @@ class ChatEngine:
         }
         if not self.conversations:
             self.current_id = None
-            self.create_conversation()
             return
         if self.current_id not in self.conversations:
             self.current_id = next(iter(self.conversations))

@@ -91,7 +91,7 @@ def test_batch_save_no_data_loss(tmp_path: Path) -> None:
     engine.add_assistant_message("助手回答", save=False)
 
     # save=False 期间的消息不应出现在磁盘上
-    assert len(list(storage.parent.iterdir())) >= 1  # 初始创建时已有文件
+    # 注意：ChatEngine 初始化时不再自动创建文件，只有 save() 才写入
     restored = ChatEngine(storage)
     assert len(restored.current_conversation.messages) == 0, "save=False 的消息不应落盘"
 

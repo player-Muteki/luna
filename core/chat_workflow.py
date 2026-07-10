@@ -110,9 +110,9 @@ class ChatWorkflow:
             })
             return
 
-        # ── 5. 记录用户消息（仅内存，暂不落盘）─────────────────────────
+        # ── 5. 记录用户消息 ──────────────────────────────────────────
         if ctx.chat_engine:
-            ctx.chat_engine.add_user_message(query, mode="rag", save=False)
+            ctx.chat_engine.add_user_message(query, mode="rag", save=True)
 
         # ── 6. 流式生成 ──────────────────────────────────────────────
         full_answer = ""

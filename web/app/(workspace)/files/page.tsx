@@ -45,19 +45,12 @@ export default function FilesPage() {
     loadFiles();
   }, [loadFiles]);
 
+  // 自动索引已移至 WorkspaceLayout 全局处理，进入文件页时仅刷新列表
   useEffect(() => {
-    if (autoIndex && files.length > 0 && !loading) {
-      const unindexedPaths = files.filter((f) => !f.is_dir && !f.is_indexed).map((f) => f.path);
-      if (unindexedPaths.length > 0) {
-        ingestFiles(unindexedPaths)
-          .then(() => {
-            loadFiles();
-            window.dispatchEvent(new CustomEvent("index-updated"));
-          })
-          .catch((e) => console.error("Auto-index failed", e));
-      }
+    if (!loading) {
+      window.dispatchEvent(new CustomEvent("index-updated"));
     }
-  }, [autoIndex, files.length]);
+  }, [loading]);
 
   const toggleFile = (path: string) => {
     setSelected((prev) => {

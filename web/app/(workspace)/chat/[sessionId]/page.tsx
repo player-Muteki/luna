@@ -119,6 +119,8 @@ export default function ChatSessionPage() {
             // Only update metadata, keep current messages intact
             return { ...data, messages: prev.messages };
           });
+          // Notify sidebar to refresh session list
+          window.dispatchEvent(new CustomEvent("session-updated"));
         }).catch(() => {});
       },
 
@@ -207,11 +209,8 @@ export default function ChatSessionPage() {
           </div>
           <div className="min-w-0">
             <h1 className="truncate text-sm font-semibold">
-              {session?.title || "会话"}
+              {session?.title || "新对话"}
             </h1>
-            <p className="text-xs text-[var(--text-secondary)]">
-              {session?.messages.length ?? 0} 条消息
-            </p>
           </div>
         </div>
         <div

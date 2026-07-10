@@ -94,20 +94,23 @@ export default function ProjectSidebar({
     return () => window.removeEventListener("index-updated", handler);
   }, []);
 
+  // 监听会话更新事件，自动刷新列表
+  useEffect(() => {
+    const handler = () => loadSessions();
+    window.addEventListener("session-updated", handler);
+    return () => window.removeEventListener("session-updated", handler);
+  }, []);
+
+  // 切换对话时刷新列表
+  useEffect(() => {
+    loadSessions();
+  }, [pathname]);
+
   const createSession = async () => {
     try {
       const data = await sessionsApi.create();
-      // Optimistically add to local list
-      setSessions((prev) => [
-        {
-          id: data.id,
-          title: data.title,
-          message_count: 0,
-          is_current: true,
-          updated_at: new Date().toISOString(),
-        },
-        ...prev,
-      ]);
+      // 通知侧边栏刷新（在导航前，确保旧会话的标题已更新）
+      window.dispatchEvent(new CustomEvent("session-updated"));
       router.push(`/chat/${data.id}`);
     } catch (e) {
       console.error(e);
@@ -318,9 +321,8 @@ export default function ProjectSidebar({
                         className="flex-1 min-w-0"
                         onDoubleClick={(e) => startRenaming(s.id, s.title, e)}
                       >
-                        <div className="truncate font-medium">{s.title}</div>
-                        <div className="text-xs text-[var(--sidebar-muted)]">
-                          {s.message_count} 条消息 · {formatDate(s.updated_at)}
+                        <div className="truncate font-medium">
+                          {s.title || "新对话"}
                         </div>
                       </div>
                     )}
