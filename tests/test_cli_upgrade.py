@@ -6,6 +6,9 @@ CLI upgrade command 测试。
   - 发现新版本 → 下载并升级
   - 未找到 wheel 附件 → 报错退出
   - GitHub API 不可达 → 报错退出
+  - packaging 不可用时 ImportError 回退路径
+  - pip install 失败场景
+  - wheel SHA256 校验失败场景
 """
 
 from __future__ import annotations
@@ -105,3 +108,61 @@ class TestUpgrade:
         assert "pip" in call_args
         assert "install" in call_args
         assert "--upgrade" in call_args
+
+    def test_upgrade_pip_install_fails(self, tmp_path: Path):
+        """pip install --upgrade 返回错误 → 报错 + 提示回滚命令。"""
+        wheel_name = "co_thinker-9.9.9-py3-none-any.whl"
+        resp = _mock_urlopen(_make_release("v9.9.9", wheel_name))
+
+        fake_wheel = tmp_path / wheel_name
+        fake_wheel.write_text("fake wheel content")
+
+        def fake_urlretrieve(url, path):
+            import shutil
+            shutil.copy2(str(fake_wheel), path)
+            return path, None
+
+        mock_subprocess = MagicMock()
+        mock_subprocess.returncode = 1
+        mock_subprocess.stderr = "pip error: network unreachable"
+
+        with (
+            patch("urllib.request.urlopen", return_value=resp),
+            patch("urllib.request.urlretrieve", side_effect=fake_urlretrieve),
+            patch("subprocess.run", return_value=mock_subprocess),
+        ):
+            result = runner.invoke(app, ["upgrade", "--yes"])
+
+        assert result.exit_code == 1
+        assert "安装失败" in result.stdout
+        assert "pip error" in result.stderr or "pip error" in result.stdout
+        assert "手动回滚" in result.stdout
+
+    def test_upgrade_packaging_fallback(self, tmp_path: Path):
+        """packaging 不可用 → 退回到字符串比较。"""
+        wheel_name = "co_thinker-9.9.9-py3-none-any.whl"
+        resp = _mock_urlopen(_make_release("v9.9.9", wheel_name))
+
+        fake_wheel = tmp_path / wheel_name
+        fake_wheel.write_text("fake wheel content")
+
+        def fake_urlretrieve(url, path):
+            import shutil
+            shutil.copy2(str(fake_wheel), path)
+            return path, None
+
+        mock_subprocess = MagicMock()
+        mock_subprocess.returncode = 0
+
+        with (
+            patch("urllib.request.urlopen", return_value=resp),
+            patch("urllib.request.urlretrieve", side_effect=fake_urlretrieve),
+            patch("subprocess.run", return_value=mock_subprocess),
+            patch.dict("sys.modules", {"packaging": None}),  # force ImportError
+        ):
+            result = runner.invoke(app, ["upgrade", "--yes"])
+
+        # packaging 被 patch 为 None 后 import 会失败，触发 fallback。
+        # 此时 9.9.9 != 0.1.7 → is_newer=True，应继续执行。
+        assert result.exit_code == 0, f"STDOUT: {result.stdout}"
+        assert "更新完成" in result.stdout

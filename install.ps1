@@ -100,9 +100,10 @@ if (Test-Path $VenDir) {
         Write-Info "已是最新版本，无需更新"
     } else {
         Write-Info "更新: $InstalledVer → $WheelVersion"
-        & $Pip install --upgrade $WheelFile 2>&1 | Out-Null
+        $pipResult = & $Pip install --upgrade $WheelFile 2>&1
         if ($LASTEXITCODE -ne 0) {
-            Write-Error "Update failed"
+            Write-Error "pip install 失败:"
+            Write-Error $pipResult
             exit 1
         }
         Write-Info "更新完成"
@@ -110,9 +111,10 @@ if (Test-Path $VenDir) {
 } else {
     Write-Info "全新安装 Co-Thinker $WheelVersion ..."
     & $Python -m venv $VenDir | Out-Null
-    & $Pip install $WheelFile 2>&1 | Out-Null
+    $pipResult = & $Pip install $WheelFile 2>&1
     if ($LASTEXITCODE -ne 0) {
-        Write-Error "Installation failed"
+        Write-Error "安装失败:"
+        Write-Error $pipResult
         exit 1
     }
     Write-Info "已安装到 $VenDir"
@@ -167,6 +169,30 @@ if ($UserPath -notlike "*$BinDir*") {
     Write-Info "Added. Restart your terminal for co-thinker to be available"
 } else {
     Write-Info "PATH already contains $BinDir"
+}
+
+# ── 6. Clean up old .local-pkgs files (dev setup residues) ────
+Write-Step "Cleaning up old co-thinker files"
+$LocalPkgsDirs = @(
+    "$env:USERPROFILE\code\co-thinker\.local-pkgs",
+    "$env:TEMP\co-thinker-main\.local-pkgs"
+)
+foreach ($dir in $LocalPkgsDirs) {
+    if (Test-Path $dir) {
+        Write-Info "清理 $dir 中的旧 co-thinker 文件..."
+        $filesToRemove = @("cli.py", "__version__.py", "config.py")
+        foreach ($file in $filesToRemove) {
+            $f = Join-Path $dir $file
+            if (Test-Path $f) { Remove-Item $f -Force -ErrorAction SilentlyContinue }
+        }
+        $dirsToRemove = @("core", "api", "web")
+        foreach ($d in $dirsToRemove) {
+            $target = Join-Path $dir $d
+            if (Test-Path $target) { Remove-Item $target -Recurse -Force -ErrorAction SilentlyContinue }
+        }
+        Get-ChildItem "$dir\co_thinker-*.dist-info" -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
+        Write-Info "  ✅ 已清理"
+    }
 }
 
 # ── Done ─────────────────────────────────────────────────────

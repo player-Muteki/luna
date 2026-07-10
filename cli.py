@@ -345,7 +345,12 @@ def upgrade(
     typer.echo("[INFO] 正在检查更新...")
 
     try:
-        req = urllib.request.Request(api_url, headers={"Accept": "application/json"})
+        headers = {"Accept": "application/json"}
+        # 如有 GitHub Token 则附带认证，避免 API 速率限制
+        gh_token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN") or ""
+        if gh_token:
+            headers["Authorization"] = f"Bearer {gh_token}"
+        req = urllib.request.Request(api_url, headers=headers)
         with urllib.request.urlopen(req, timeout=15) as resp:
             data = json.loads(resp.read().decode())
     except (urllib.error.URLError, json.JSONDecodeError, OSError) as e:
@@ -358,11 +363,13 @@ def upgrade(
         typer.echo("[ERROR] 无法解析最新版本号")
         raise typer.Exit(1)
 
-    # 获取 wheel 下载 URL
+    # 获取 wheel 信息
     wheel_url = None
+    wheel_sha = None
     for asset in data.get("assets", []):
         if asset.get("name", "").endswith(".whl"):
             wheel_url = asset.get("browser_download_url")
+            wheel_sha = asset.get("sha256") or None
             break
 
     typer.echo(f"最新版本: {latest_version}")
@@ -391,6 +398,7 @@ def upgrade(
 
     # 5. 下载 wheel
     typer.echo("[INFO] 正在下载最新版本...")
+    import hashlib
     import tempfile
     tmp_dir = tempfile.mkdtemp()
     wheel_name = wheel_url.split("/")[-1]
@@ -400,11 +408,26 @@ def upgrade(
         urllib.request.urlretrieve(wheel_url, str(wheel_path))
     except (urllib.error.URLError, OSError) as e:
         typer.echo(f"[ERROR] 下载失败: {e}")
+        shutil.rmtree(tmp_dir, ignore_errors=True)
         raise typer.Exit(1)
+
+    # 校验 wheel SHA256（如果 release 提供了）
+    if wheel_sha:
+        actual_sha = hashlib.sha256(wheel_path.read_bytes()).hexdigest()
+        if actual_sha != wheel_sha:
+            typer.echo(f"[ERROR] wheel 校验失败: SHA256 不匹配")
+            typer.echo(f"  期望: {wheel_sha}")
+            typer.echo(f"  实际: {actual_sha}")
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+            raise typer.Exit(1)
+        typer.echo("[OK] wheel 校验通过")
 
     typer.echo(f"[OK] 下载完成: {wheel_name}")
 
-    # 6. pip install --upgrade
+    # 6. 记录当前版本，准备回滚
+    old_version = __version__
+
+    # 7. pip install --upgrade
     typer.echo("[INFO] 正在安装更新...")
     result = subprocess.run(
         [sys.executable, "-m", "pip", "install", "--upgrade", str(wheel_path)],
@@ -412,14 +435,22 @@ def upgrade(
     )
     if result.returncode != 0:
         typer.echo(f"[ERROR] 安装失败:\n{result.stderr}")
+        typer.echo(f"[INFO] 可手动回滚: pip install co-thinker=={old_version}")
+        shutil.rmtree(tmp_dir, ignore_errors=True)
         raise typer.Exit(1)
 
     typer.echo("[OK] 更新完成！")
     typer.echo(f"版本: {latest_version}")
 
-    # 清理临时文件
-    import shutil
+    # 8. 清理临时文件
     shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    # 9. 删除前端构建缓存，确保下次 start 时重建
+    next_dir = _get_web_dir() / ".next"
+    if next_dir.exists():
+        typer.echo("[INFO] 清理前端构建缓存以触发重建...")
+        shutil.rmtree(next_dir, ignore_errors=True)
+        typer.echo("[INFO] 下次 co-thinker start 将自动构建新版前端")
 
 
 @app.command()
