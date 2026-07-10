@@ -367,9 +367,13 @@ def upgrade(
 
     typer.echo(f"最新版本: {latest_version}")
 
-    # 3. 比较版本号
-    from packaging.version import parse as parse_version
-    if parse_version(latest_version) <= parse_version(__version__):
+    # 3. 比较版本号（优先用 packaging，fallback 到字符串比较）
+    try:
+        from packaging.version import parse as parse_version
+        is_newer = parse_version(latest_version) > parse_version(__version__)
+    except ImportError:
+        is_newer = latest_version != __version__
+    if not is_newer:
         typer.echo("[OK] 已是最新版本，无需更新")
         raise typer.Exit()
 
