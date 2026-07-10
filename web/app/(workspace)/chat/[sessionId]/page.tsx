@@ -20,6 +20,9 @@ export default function ChatSessionPage() {
   // Refs to track retrieval/reasoning state during streaming (avoids stale closures)
   const retrievalRef = useRef<RetrievalDetails | null>(null);
   const reasoningRef = useRef("");
+  const typewriterBufferRef = useRef("");
+  const typewriterTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const streamStartedRef = useRef(false);
 
   // ChatStream instance — stable across renders
   const streamRef = useRef<ChatStream | null>(null);
@@ -41,19 +44,11 @@ export default function ChatSessionPage() {
   useEffect(() => {
     const stream = new ChatStream(sessionId, {
       onChunk: (content) => {
-        setSession((prev) => {
-          if (!prev) return prev;
-          const messages = [...prev.messages];
-          const last = messages[messages.length - 1];
-
-          if (last && last.role === "assistant") {
-            // Append to existing assistant message
-            messages[messages.length - 1] = {
-              ...last,
-              content: last.content + content,
-            };
-          } else {
-            // Create new assistant message with retrieval/reasoning metadata
+        if (!streamStartedRef.current) {
+          streamStartedRef.current = true;
+          setSession((prev) => {
+            if (!prev) return prev;
+            const messages = [...prev.messages];
             const metadata: Message["metadata"] = {};
             if (retrievalRef.current) {
               metadata.retrieval_details = retrievalRef.current;
@@ -61,18 +56,19 @@ export default function ChatSessionPage() {
             if (reasoningRef.current) {
               metadata.reasoning_text = reasoningRef.current;
             }
+            retrievalRef.current = null;
+            reasoningRef.current = "";
             messages.push({
               id: "streaming",
               role: "assistant",
-              content,
+              content: "",
               created_at: new Date().toISOString(),
               metadata,
             });
-            retrievalRef.current = null;
-            reasoningRef.current = "";
-          }
-          return { ...prev, messages };
-        });
+            return { ...prev, messages };
+          });
+        }
+        typewriterBufferRef.current += content;
       },
 
       onReasoning: (content) => {
@@ -87,12 +83,15 @@ export default function ChatSessionPage() {
         setStreaming(false);
         retrievalRef.current = null;
         reasoningRef.current = "";
+        streamStartedRef.current = false;
         // Reload session to get proper IDs and persisted metadata
         loadSession();
       },
 
       onError: (message) => {
         setStreaming(false);
+        streamStartedRef.current = false;
+        typewriterBufferRef.current = "";
         console.error("ChatStream error:", message);
       },
 
@@ -111,11 +110,62 @@ export default function ChatSessionPage() {
     };
   }, [sessionId, loadSession]);
 
+  // Typewriter effect: feed characters from buffer one by one
+  useEffect(() => {
+    if (!streaming) {
+      if (typewriterTimerRef.current) {
+        clearInterval(typewriterTimerRef.current);
+        typewriterTimerRef.current = null;
+      }
+      // Flush remaining buffer
+      if (typewriterBufferRef.current) {
+        const remaining = typewriterBufferRef.current;
+        typewriterBufferRef.current = "";
+        setSession((prev) => {
+          if (!prev) return prev;
+          const messages = [...prev.messages];
+          const last = messages[messages.length - 1];
+          if (last && last.role === "assistant") {
+            messages[messages.length - 1] = { ...last, content: last.content + remaining };
+          }
+          return { ...prev, messages };
+        });
+      }
+      return;
+    }
+
+    typewriterTimerRef.current = setInterval(() => {
+      const buf = typewriterBufferRef.current;
+      if (!buf) return;
+      // Emit one character at a time
+      const char = buf[0];
+      typewriterBufferRef.current = buf.slice(1);
+      setSession((prev) => {
+        if (!prev) return prev;
+        const messages = [...prev.messages];
+        const last = messages[messages.length - 1];
+        if (last && last.role === "assistant") {
+          messages[messages.length - 1] = { ...last, content: last.content + char };
+        }
+        return { ...prev, messages };
+      });
+    }, 30);
+
+    return () => {
+      if (typewriterTimerRef.current) {
+        clearInterval(typewriterTimerRef.current);
+        typewriterTimerRef.current = null;
+      }
+    };
+  }, [streaming]);
+
   const sendMessage = useCallback(
     (content: string, model?: string) => {
       const stream = streamRef.current;
       if (!stream) return;
 
+      streamStartedRef.current = false;
+      typewriterBufferRef.current = "";
       setStreaming(true);
       stream.sendQuery(content, model);
     },

@@ -84,7 +84,7 @@ export default function SettingsPage() {
 
   // Auto-save: debounced save when any setting changes
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const saveSettings = () => {
+  const saveSettings = (overrides?: { apiKey?: string }) => {
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(async () => {
       setSaving(true);
@@ -92,23 +92,29 @@ export default function SettingsPage() {
         localStorage.setItem(AUTO_INDEX_KEY, String(autoIndex));
         localStorage.setItem(MODEL_KEY, selectedModel);
 
+        const effectiveApiKey = overrides?.apiKey !== undefined ? overrides.apiKey : apiKey;
         const body: Record<string, unknown> = {
           top_k: topK,
           chunk_size: chunkSize,
           model: selectedModel,
         };
-        if (apiKey) body.api_key = apiKey;
+        if (effectiveApiKey) body.api_key = effectiveApiKey;
         const res = await fetch("/api/config", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
         if (res.ok) {
-          setApiKey("");
-          fetchModels();
+          if (effectiveApiKey) {
+            setApiKey("");
+            fetchModels();
+          }
+        } else {
+          const err = await res.json().catch(() => ({}));
+          console.error("保存失败:", err);
         }
-      } catch {
-        // silent
+      } catch (e) {
+        console.error("保存失败:", e);
       } finally {
         setSaving(false);
       }
@@ -209,8 +215,9 @@ export default function SettingsPage() {
               type={showApiKey ? "text" : "password"}
               value={apiKey}
               onChange={(e) => {
-                setApiKey(e.target.value);
-                saveSettings();
+                const val = e.target.value;
+                setApiKey(val);
+                saveSettings({ apiKey: val });
               }}
               placeholder="sk-...（留空则沿用已有配置）"
               className="h-9 w-full rounded-md border border-[var(--surface-border)] bg-[var(--surface-bg)] pr-8 pl-3 text-sm outline-none transition-colors placeholder:text-[var(--text-muted)] focus:border-[var(--accent)]"

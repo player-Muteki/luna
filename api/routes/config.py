@@ -143,6 +143,15 @@ async def save_config(
                 global_cfg.setdefault("model", {})
                 global_cfg["model"]["base_url"] = req.base_url
             GLOBAL_CONFIG_PATH.write_text(tomli_w.dumps(global_cfg), encoding="utf-8")
+
+            # 重新初始化 LLM，使新 key 立即生效
+            from core.project import get_llm, get_embedding_model
+            try:
+                ctx.ctx.llm = get_llm(ctx.ctx)
+            except Exception:
+                ctx.ctx.llm = None
+            ctx.ctx.embedding_model = get_embedding_model(ctx.ctx)
+            ctx.ctx.setup_engines()
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"保存 API 配置失败: {e}")
 
