@@ -59,6 +59,39 @@ async def list_models(
         return {"models": fallback}
 
 
+class TestConnectionRequest(BaseModel):
+    api_key: str | None = None
+    base_url: str | None = None
+    model: str | None = None
+
+
+@router.post("/config/test")
+async def test_connection(
+    req: TestConnectionRequest,
+    ctx: Any = Depends(get_project_context),
+):
+    """测试 API 供应商连通性，返回延迟与状态。"""
+    import time
+    from core.project import get_api_key, _global_model_base_url
+
+    api_key = req.api_key or get_api_key(ctx.ctx)
+    if not api_key:
+        return {"status": "error", "model": req.model or ctx.config.model, "elapsed_ms": 0, "error": "未配置 API Key"}
+    base_url = req.base_url or _global_model_base_url() or ctx.config.base_url
+    model = req.model or ctx.config.model
+
+    start = time.perf_counter()
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key, base_url=base_url)
+        client.models.list()
+        elapsed = round((time.perf_counter() - start) * 1000)
+        return {"status": "ok", "model": model, "elapsed_ms": elapsed}
+    except Exception as e:
+        elapsed = round((time.perf_counter() - start) * 1000)
+        return {"status": "error", "model": model, "elapsed_ms": elapsed, "error": str(e)}
+
+
 @router.post("/config")
 async def save_config(
     req: ConfigUpdate,

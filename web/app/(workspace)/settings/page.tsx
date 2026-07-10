@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Eye, EyeOff, Check } from "lucide-react";
+import { Eye, EyeOff, Check, Loader2, Wifi, WifiOff } from "lucide-react";
 
 const AUTO_INDEX_KEY = "co-thinker-auto-index";
 const MODEL_KEY = "co-thinker-model";
@@ -17,6 +17,8 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [modelOpen, setModelOpen] = useState(false);
   const modelRef = useRef<HTMLDivElement>(null);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ status: string; model: string; elapsed_ms: number; error?: string } | null>(null);
 
   // Load saved settings and available models on mount
   useEffect(() => {
@@ -47,6 +49,24 @@ export default function SettingsPage() {
       }
     } catch {
       // silent
+    }
+  };
+
+  const testConnection = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const res = await fetch("/api/config/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ api_key: apiKey || undefined, model: selectedModel }),
+      });
+      const data = await res.json();
+      setTestResult(data);
+    } catch {
+      setTestResult({ status: "error", model: selectedModel, elapsed_ms: 0, error: "请求失败" });
+    } finally {
+      setTesting(false);
     }
   };
 
@@ -184,7 +204,7 @@ export default function SettingsPage() {
         {/* API Key */}
         <div className="rounded-lg border border-[var(--surface-border)] bg-[var(--surface-panel)] p-4 shadow-[var(--shadow-sm)]">
           <h2 className="mb-3 text-sm font-semibold text-[var(--text-primary)]">API Key</h2>
-          <div className="relative">
+          <div className="relative mb-2">
             <input
               type={showApiKey ? "text" : "password"}
               value={apiKey}
@@ -201,6 +221,30 @@ export default function SettingsPage() {
             >
               {showApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
             </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={testConnection}
+              disabled={testing}
+              className="inline-flex items-center gap-1.5 rounded-md border border-[var(--surface-border)] bg-[var(--surface-bg)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] transition-colors hover:bg-[var(--surface-alt)] disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {testing ? (
+                <><Loader2 size={13} className="animate-spin" /> 测试中...</>
+              ) : (
+                <><Wifi size={13} /> 测试连通性</>
+              )}
+            </button>
+            {testResult && (
+              <span className={`inline-flex items-center gap-1 text-xs ${
+                testResult.status === "ok" ? "text-[var(--success)]" : "text-[var(--danger)]"
+              }`}>
+                {testResult.status === "ok" ? <Wifi size={12} /> : <WifiOff size={12} />}
+                {testResult.model}
+                {testResult.status === "ok"
+                  ? ` 连通正常 ${testResult.elapsed_ms}ms`
+                  : ` 连通失败${testResult.error ? `: ${testResult.error}` : ""}`}
+              </span>
+            )}
           </div>
         </div>
 
