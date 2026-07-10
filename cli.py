@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -81,12 +82,12 @@ def _sanitize_env(keep_pythonpath: bool = False) -> dict[str, str]:
     if not keep_pythonpath and "PYTHONPATH" in env:
         pp = env["PYTHONPATH"]
         cleaned = []
-        for p in pp.split(":"):
+        for p in pp.split(os.pathsep):
             p_stripped = p.strip()
             if p_stripped and ".local-pkgs" not in p_stripped:
                 cleaned.append(p_stripped)
         if cleaned:
-            env["PYTHONPATH"] = ":".join(cleaned)
+            env["PYTHONPATH"] = os.pathsep.join(cleaned)
         else:
             env.pop("PYTHONPATH", None)
     return env
@@ -136,11 +137,18 @@ def init(
         try:
             import tomli_w
         except ImportError:
-            os.system(f"{sys.executable} -m pip install tomli-w")
-            try:
-                import tomli_w  # type: ignore[import-untyped]
-            except ImportError:
-                typer.echo("[WARN] 无法安装 tomli-w，跳过 config.toml 创建")
+            result = subprocess.run(
+                [sys.executable, "-m", "pip", "install", "tomli-w"],
+                capture_output=True, timeout=60,
+            )
+            if result.returncode == 0:
+                try:
+                    import tomli_w  # type: ignore[import-untyped]
+                except ImportError:
+                    typer.echo("[WARN] 无法安装 tomli-w，跳过 config.toml 创建")
+                    config_path = None
+            else:
+                typer.echo("[WARN] pip install tomli-w 失败，跳过 config.toml 创建")
                 config_path = None
 
         if config_path:
@@ -455,11 +463,9 @@ def _start_api_only(api_port: int, cwd: Path) -> None:
 
 def _ensure_npm_available() -> bool:
     """检测并确保 npm 在 PATH 中可用。"""
-    try:
-        subprocess.run(["which", "npm"], capture_output=True, timeout=10, check=True)
+    if shutil.which("npm") is not None:
         return True
-    except (FileNotFoundError, subprocess.TimeoutExpired, subprocess.CalledProcessError):
-        _add_node_paths()
+    _add_node_paths()
 
     try:
         subprocess.run(["npm", "--version"], capture_output=True, timeout=10, check=True)
@@ -474,15 +480,19 @@ def _add_node_paths() -> None:
         "/opt/homebrew/bin",
         "/usr/local/bin",
         os.path.expanduser("~/.nvm/versions/node/*/bin"),
+        # Windows 常见 Node.js 安装路径
+        os.path.expanduser("~\\AppData\\Roaming\\npm"),
+        os.path.expandvars("%ProgramFiles%\\nodejs"),
+        os.path.expandvars("%ProgramFiles(x86)%\\nodejs"),
     ]
     for path in candidates:
         if "*" in path:
             import glob
             matches = glob.glob(path)
             if matches:
-                os.environ.setdefault("PATH", f"{matches[-1]}:{os.environ.get('PATH', '')}")
+                os.environ.setdefault("PATH", f"{matches[-1]}{os.pathsep}{os.environ.get('PATH', '')}")
         else:
-            os.environ.setdefault("PATH", f"{path}:{os.environ.get('PATH', '')}")
+            os.environ.setdefault("PATH", f"{path}{os.pathsep}{os.environ.get('PATH', '')}")
 
 
 def _start_api_process(api_port: int, cwd: Path) -> subprocess.Popen:
@@ -497,7 +507,7 @@ def _start_api_process(api_port: int, cwd: Path) -> subprocess.Popen:
     if source_root.joinpath("pyproject.toml").exists():
         existing = env.get("PYTHONPATH", "")
         if existing:
-            env["PYTHONPATH"] = f"{source_root}:{existing}"
+            env["PYTHONPATH"] = f"{source_root}{os.pathsep}{existing}"
         else:
             env["PYTHONPATH"] = str(source_root)
 

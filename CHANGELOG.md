@@ -1,5 +1,17 @@
 # Changelog
 
+## [v0.0.15] - 2026-07-10
+
+### 🐛 Bug Fixes
+- 修复 CLI 中跨平台不兼容问题：PYTHONPATH / PATH 分隔符硬编码 `:` 改为 `os.pathsep`，支持 Windows
+- 替换 `os.system()` 为 `subprocess.run()`，提高子进程管理的可靠性和安全性
+- `which` 命令替换为 `shutil.which()`，解决 Windows 上命令不存在的问题
+
+### 🔧 Maintenance
+- 版本号更新至 v0.0.15
+
+---
+
 ## [v0.0.13] - 2026-07-09
 
 ### ✨ Features
