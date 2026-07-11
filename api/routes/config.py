@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -128,12 +129,14 @@ async def save_config(
             if req.api_key is not None:
                 global_cfg.setdefault("auth", {})
                 global_cfg["auth"]["api_key"] = req.api_key
+                os.environ["DEEPSEEK_API_KEY"] = req.api_key
             if req.base_url is not None:
                 global_cfg.setdefault("model", {})
                 global_cfg["model"]["base_url"] = req.base_url
             GLOBAL_CONFIG_PATH.write_text(tomli_w.dumps(global_cfg), encoding="utf-8")
 
-            # 重新初始化 LLM，使新 key 立即生效
+            ctx.ctx._global_config = global_cfg
+
             try:
                 ctx.ctx.llm = ctx.ctx.get_llm()
             except Exception:
