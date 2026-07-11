@@ -99,7 +99,23 @@ fi
 # --- Extract wheel version ---
 WHEEL_VERSION=""
 if [[ -n "$WHEEL_PATH" && "$WHEEL_PATH" == *.whl ]]; then
-    WHEEL_VERSION=$(basename "$WHEEL_PATH" | sed -n 's/^lore-\([0-9.]*\)-.*/\1/p')
+    WHEEL_VERSION=$(python3 -c "
+import zipfile, re, sys
+try:
+    with zipfile.ZipFile('$WHEEL_PATH') as z:
+        for name in z.namelist():
+            if name.endswith('.dist-info/METADATA'):
+                for line in z.read(name).decode().splitlines():
+                    m = re.match(r'^Version:\s*(.+)', line)
+                    if m:
+                        print(m.group(1).strip())
+                        sys.exit(0)
+except Exception:
+    pass
+" 2>/dev/null || true)
+    if [[ -z "$WHEEL_VERSION" ]]; then
+        WHEEL_VERSION=$(basename "$WHEEL_PATH" | sed -n 's/^lore-\([0-9.]*\)-.*/\1/p')
+    fi
 fi
 if [[ -z "$WHEEL_VERSION" ]]; then
     WHEEL_VERSION="0.0.0"
@@ -188,6 +204,13 @@ if [[ -L "$LINK" || -f "$LINK" ]]; then
 fi
 ln -s "$VENV_DIR/bin/Lore" "$LINK"
 info "Created link: $LINK -> $VENV_DIR/bin/Lore"
+
+LINK2="$BIN_DIR/lore"
+if [[ -L "$LINK2" || -f "$LINK2" ]]; then
+    rm -f "$LINK2"
+fi
+ln -s "$VENV_DIR/bin/lore" "$LINK2"
+info "Created link: $LINK2 -> $VENV_DIR/bin/lore"
 
 # --- 5. Check PATH ---
 step "Checking PATH"

@@ -62,7 +62,24 @@ if ($WheelPath -and (Test-Path $WheelPath)) {
 }
 
 # ── Extract wheel version ────────────────────────────────
-$WheelVersion = if ($WheelFile -match 'lore-(\d+\.\d+\.\d+)-') { $matches[1] } else { "0.0.0" }
+$WheelVersion = ""
+try {
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $zip = [System.IO.Compression.ZipFile]::OpenRead($WheelFile)
+    $metadataEntry = $zip.Entries | Where-Object { $_.FullName -match '\.dist-info/METADATA$' } | Select-Object -First 1
+    if ($metadataEntry) {
+        $reader = New-Object System.IO.StreamReader($metadataEntry.Open())
+        $content = $reader.ReadToEnd()
+        $reader.Close()
+        if ($content -match '(?m)^Version:\s*(.+)') {
+            $WheelVersion = $Matches[1].Trim()
+        }
+    }
+    $zip.Dispose()
+} catch {}
+if (-not $WheelVersion) {
+    $WheelVersion = if ($WheelFile -match 'lore-(\d+\.\d+\.\d+)-') { $matches[1] } else { "0.0.0" }
+}
 
 # ── 1. Check Python ────────────────────────────────────────
 Write-Step "Checking Python"
@@ -158,6 +175,11 @@ $CoThinkerExe = Join-Path $VenDir "Scripts\lore.exe"
 "@echo off`r`n`"$CoThinkerExe`" %*" | Set-Content -Path $BatPath
 Write-Info "Created shortcut: $BatPath"
 
+$BatPathLore = Join-Path $BinDir "Lore.cmd"
+$CoThinkerExeLore = Join-Path $VenDir "Scripts\Lore.exe"
+"@echo off`r`n`"$CoThinkerExeLore`" %*" | Set-Content -Path $BatPathLore
+Write-Info "Created shortcut: $BatPathLore"
+
 # ── 5. Check PATH ──────────────────────────────────────────
 Write-Step "Checking PATH"
 $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
@@ -181,7 +203,7 @@ $LocalPkgsDirs = @(
 foreach ($dir in $LocalPkgsDirs) {
     if (Test-Path $dir) {
         Write-Info "清理 $dir 中的旧 lore 文件..."
-        $filesToRemove = @("cli.py", "__version__.py", "config.py")
+        $filesToRemove = @("cli.py", "__version__.py", "config.py", "lore.cmd", "Lore.cmd")
         foreach ($file in $filesToRemove) {
             $f = Join-Path $dir $file
             if (Test-Path $f) { Remove-Item $f -Force -ErrorAction SilentlyContinue }
