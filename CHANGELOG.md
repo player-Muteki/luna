@@ -1,5 +1,12 @@
 # Changelog
 
+## [v0.2.1] - 2026-07-11
+
+### 🐛 Bug Fixes
+- 修复保存 API Key 后测试连通性仍使用环境变量中错误 key 的问题：保存时同步更新 `DEEPSEEK_API_KEY` 进程环境变量和内存中的全局配置，确保 `get_api_key()` 返回正确的 key
+
+---
+
 ## [v0.2.0] - 2026-07-10
 
 ### 🔧 Refactoring (Clean Code)
