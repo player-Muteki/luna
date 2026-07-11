@@ -3,16 +3,16 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "co-thinker"
+name = "lore"
 dynamic = ["version"]
-description = "基于 RAG 的本地知识问答系统"
+description = "基于 RAG 的个人知识问答系统"
 requires-python = ">=3.10"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
-    {name = "Co-Thinker Contributors"},
+    {name = "Lore Contributors"},
 ]
-keywords = ["rag", "knowledge-base", "qa", "deepseek"]
+keywords = ["rag", "knowledge-base", "qa", "lore", "deepseek"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -41,16 +41,16 @@ dependencies = [
     "python-docx>=1.1.0",
     "pymupdf>=1.24.0",
     "python-pptx>=1.0.0",
-    # Version comparison (used by `co-thinker upgrade`)
+    # Version comparison (used by `lore upgrade`)
     "packaging>=23.0",
 ]
 
 [project.urls]
-Homepage = "https://github.com/player-Muteki/co-thinker"
-Source = "https://github.com/player-Muteki/co-thinker"
+Homepage = "https://github.com/player-Muteki/lore"
+Source = "https://github.com/player-Muteki/lore"
 
 [project.scripts]
-co-thinker = "cli:main"
+lore = "cli:main"
 
 [tool.setuptools.dynamic]
 version = {attr = "__version__.__version__"}

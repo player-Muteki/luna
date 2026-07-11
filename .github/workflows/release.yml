@@ -61,7 +61,7 @@ jobs:
         run: |
           ls -lh dist/
           python -m pip install dist/*.whl
-          co-thinker version
+          lore version
 
       - name: Create Release & upload assets
         env:

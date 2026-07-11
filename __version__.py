@@ -1,4 +1,4 @@
-"""Single source of truth for the Co-Thinker version."""
+"""Single source of truth for the Lore version."""
 
 __version__ = "0.2.2"
 

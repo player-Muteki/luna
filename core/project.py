@@ -1,5 +1,5 @@
 """
-ProjectContext — Co-Thinker 与工作目录的绑定桩。
+ProjectContext — Lore 与工作目录的绑定桩。
 
 每个进程绑定到一个 CWD，通过它访问所有资源。
 
@@ -174,7 +174,7 @@ class ProjectConfig:
             config_dict[field_name] = value
 
         import tomli_w as _tomli_w
-        content = "# Co-Thinker Project Configuration\n" + _tomli_w.dumps({"project": config_dict})
+        content = "# Lore Project Configuration\n" + _tomli_w.dumps({"project": config_dict})
         path.write_text(content, encoding="utf-8")
 
 

@@ -1,10 +1,12 @@
-# Co-Thinker
+# Lore
 
-基于 RAG 的大模型智能问答系统 — 面向特定领域的知识问答。
+基于 RAG 的个人知识问答系统 — 本地部署，围绕工作目录下的文档进行知识问答。
 
 ## 项目简介
 
 实现一个基于文本查询的智能问答系统，支持多格式文档批量导入构建知识库，利用语义理解与 RAG 技术精准检索并生成自然流畅的答案，支持多轮对话上下文管理。
+
+与部署在本地的编码代理类似，Lore 也采取**本地部署模式**，围绕本地工作目录下的知识库源文件进行问答。采取 **CLI 启动 + WebUI 问答**的架构设计，兼顾终端用户的效率偏好与图形界面的交互体验。
 
 ## 功能模块
 
@@ -17,69 +19,36 @@
 - **配置管理** — Web 设置页可视化修改模型、API Key、Base URL 等配置
 - **CLI 工具链** — 一键初始化、启动、扫描、问答
 
+## 快速开始
 
-## 安装
+### 安装
 
-### Linux / macOS
-
-一条命令安装 Co-Thinker：
-
-**方式一（推荐 — jsDelivr CDN，全球加速）**
+**Linux / macOS**
 
 ```bash
-curl -fsSL 'https://cdn.jsdelivr.net/gh/player-Muteki/co-thinker@main/install.sh' | bash
+curl -fsSL 'https://cdn.jsdelivr.net/gh/player-Muteki/lore@main/install.sh' | bash
 ```
 
-**方式二（GitHub Raw，备选）**
-
-```bash
-curl -fsSL 'https://raw.githubusercontent.com/player-Muteki/co-thinker/refs/heads/main/install.sh' | bash
-```
-
-> macOS 默认的 bash 3.2 部分功能有限，推荐先升级 bash（`brew install bash`）或使用 zsh 执行。
->
-> 注意：`curl` 命令中的 `-f`（`--fail`）确保在下载失败时不会将错误页面传给 bash。
-
-### Windows
-
-以管理员身份打开 PowerShell，执行以下任一命令：
-
-**方式一（推荐 — jsDelivr CDN）：**
+**Windows（PowerShell 管理员）**
 
 ```powershell
-powershell -ExecutionPolicy Bypass -c "curl.exe -fsSL -o $env:TEMP\install.ps1 'https://cdn.jsdelivr.net/gh/player-Muteki/co-thinker@main/install.ps1'; & $env:TEMP\install.ps1"
-```
-
-**方式二（GitHub Raw 备选）：**
-
-```powershell
-powershell -ExecutionPolicy Bypass -c "curl.exe -fsSL -o $env:TEMP\install.ps1 'https://raw.githubusercontent.com/player-Muteki/co-thinker/refs/heads/main/install.ps1'; & $env:TEMP\install.ps1"
+powershell -ExecutionPolicy Bypass -c "curl.exe -fsSL -o $env:TEMP\install.ps1 'https://cdn.jsdelivr.net/gh/player-Muteki/lore@main/install.ps1'; & $env:TEMP\install.ps1"
 ```
 
 ### 启动
 
-安装完成后，在新目录中初始化项目并启动：
-
 ```bash
-mkdir my-kb && cd my-kb           # Linux / macOS
-co-thinker init                    # 创建 .co-thinker/ 配置目录
-co-thinker start                   # 启动 Web 界面
+mkdir my-kb && cd my-kb
+lore init                    # 创建 .lore/ 配置目录
+lore start                   # 启动 Web 界面
 ```
 
-Windows PowerShell 请用 `;` 代替 `&&`：
-
-```powershell
-mkdir my-kb; cd my-kb
-co-thinker init
-co-thinker start
-```
-
-> 首次运行 `co-thinker init` 时会提示填写 DeepSeek API Key，自动保存到 `~/.co-thinkerc`。
+首次运行 `lore init` 时会提示填写 DeepSeek API Key，自动保存到 `~/.lorerc`。
 
 ## 项目结构
 
 ```
-co-thinker/
+lore/
 ├── api/                    # FastAPI 后端服务
 │   ├── server.py           # 应用入口与路由注册
 │   ├── deps.py             # 依赖注入
@@ -105,4 +74,39 @@ co-thinker/
 └── README.md
 ```
 
-> 运行时数据（`.co-thinker/`）由程序自动生成，不纳入版本控制。
+> 运行时数据（`.lore/`）由程序自动生成，不纳入版本控制。
+
+## 设计亮点
+
+### 本地部署 · 知识主权
+
+受当下编码代理（Coding Agent）本地部署模式的启发，Lore 采用**纯本地运行架构**。所有文档解析、向量索引、检索与推理均在用户自己的机器上完成，无需上传任何文件至云端。用户围绕**本地工作目录**下的源文件构建知识库，做到数据不出域、知识归自己。
+
+### CLI 启航 · Web 远航
+
+采取 **「CLI 启动 + WebUI 问答」** 的分层设计：
+
+- **CLI 层**（`lore init / start / scan / run`）—— 一条命令完成初始化、启动服务、扫描文档、单轮问答
+- **WebUI 层**（Next.js + FastAPI + WebSocket）—— 启动后浏览器接管交互：文件树管理、标签标注、检索详情可视化、多轮对话流式问答
+
+二者共用同一套后端引擎，CLI 是入口，WebUI 是主场。
+
+### 混合检索
+
+向量检索（语义理解）+ BM25（关键词精确匹配）+ RRF（Reciprocal Rank Fusion）加权融合，兼顾语义泛化能力与精确命中能力。
+
+### 指代消解与查询重写
+
+内置查询预处理管道，自动检测短查询/指代词，结合对话历史进行上下文增强，确保多轮问答连贯性。
+
+## 开发
+
+```bash
+git clone https://github.com/player-Muteki/lore.git
+cd lore
+bash setup.sh        # 创建虚拟环境 + 安装依赖
+```
+
+## License
+
+MIT

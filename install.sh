@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-# Co-Thinker one-click install
+# Lore one-click install
 #
 # Usage:
 #   bash install.sh                    # install from GitHub Release (latest wheel)
@@ -19,7 +19,7 @@ error() { echo -e "${RED}==>${NC} $1"; }
 step()  { echo -e "\n${BOLD}>> $1${NC}"; }
 
 # --- Determine install source ---
-REPO="player-Muteki/co-thinker"
+REPO="player-Muteki/lore"
 WHEEL_PATH=""
 
 if [[ $# -ge 1 && -f "$1" ]]; then
@@ -27,7 +27,7 @@ if [[ $# -ge 1 && -f "$1" ]]; then
     WHEEL_PATH="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
     info "使用本地 wheel: $WHEEL_PATH"
 else
-    step "Downloading Co-Thinker from GitHub Release"
+    step "Downloading Lore from GitHub Release"
 
     TMP_DIR=$(mktemp -d)
 
@@ -77,18 +77,18 @@ for a in assets:
             info "Downloading zip..."
             ZIP_URL="https://github.com/$REPO/archive/refs/heads/main.zip"
             if command -v curl &>/dev/null; then
-                curl -fsSL --max-time 30 -o "/tmp/co-thinker.zip" "$ZIP_URL"
+                curl -fsSL --max-time 30 -o "/tmp/Lore.zip" "$ZIP_URL"
             elif command -v wget &>/dev/null; then
-                wget -q --timeout=30 -O "/tmp/co-thinker.zip" "$ZIP_URL"
+                wget -q --timeout=30 -O "/tmp/Lore.zip" "$ZIP_URL"
             else
                 error "需要 curl 或 wget 来下载安装包"
                 exit 1
             fi
-            unzip -q "/tmp/co-thinker.zip" -d "/tmp/" 2>/dev/null || {
+            unzip -q "/tmp/Lore.zip" -d "/tmp/" 2>/dev/null || {
                 error "解压失败"
                 exit 1
             }
-            WHEEL_PATH="/tmp/co-thinker-main"
+            WHEEL_PATH="/tmp/Lore-main"
             info "Source extracted to $WHEEL_PATH"
         fi
     else
@@ -126,9 +126,9 @@ if [[ -z "$PYTHON" ]]; then
 fi
 
 # --- 2. Install to venv (增量更新) ---
-step "Installing Co-Thinker"
+step "Installing Lore"
 
-VENV_DIR="$HOME/.co-thinker"
+VENV_DIR="$HOME/.Lore"
 if [[ -d "$VENV_DIR" ]]; then
     # 获取已安装版本
     INSTALLED_VER=$("$VENV_DIR/bin/python" -c "from __version__ import __version__; print(__version__)" 2>/dev/null || echo "0.0.0")
@@ -148,7 +148,7 @@ if [[ -d "$VENV_DIR" ]]; then
         info "更新完成"
     fi
 else
-    info "全新安装 Co-Thinker $WHEEL_VERSION ..."
+    info "全新安装 Lore $WHEEL_VERSION ..."
     "$PYTHON" -m venv "$VENV_DIR"
     PYTHONPATH= "$VENV_DIR/bin/pip" install "$WHEEL_PATH" --quiet || {
         error "pip install 失败"
@@ -166,10 +166,10 @@ if [[ -n "$WEB_DIR" && -f "$WEB_DIR/package.json" ]]; then
         if (cd "$WEB_DIR" && npm install --quiet) 2>&1; then
             info "前端依赖安装完成"
         else
-            warn "npm install 失败，首次 co-thinker start 时会自动安装"
+            warn "npm install 失败，首次 Lore start 时会自动安装"
         fi
     else
-        warn "npm 未安装，首次 co-thinker start 时会自动安装"
+        warn "npm 未安装，首次 Lore start 时会自动安装"
         warn "推荐安装 Node.js (https://nodejs.org/) 以获得更快的启动体验"
     fi
 else
@@ -182,12 +182,12 @@ step "Setting up PATH"
 BIN_DIR="$HOME/.local/bin"
 mkdir -p "$BIN_DIR"
 
-LINK="$BIN_DIR/co-thinker"
+LINK="$BIN_DIR/Lore"
 if [[ -L "$LINK" || -f "$LINK" ]]; then
     rm -f "$LINK"
 fi
-ln -s "$VENV_DIR/bin/co-thinker" "$LINK"
-info "Created link: $LINK -> $VENV_DIR/bin/co-thinker"
+ln -s "$VENV_DIR/bin/Lore" "$LINK"
+info "Created link: $LINK -> $VENV_DIR/bin/Lore"
 
 # --- 5. Check PATH ---
 step "Checking PATH"
@@ -212,14 +212,14 @@ else
     info "PATH already includes $BIN_DIR"
 fi
 
-# --- 6. Clean up old co-thinker files in .local-pkgs ---
-step "Cleaning up old co-thinker files"
-# 如果 PYTHONPATH 中包含 .local-pkgs 目录，其中有老版本 co-thinker 文件，
+# --- 6. Clean up old Lore files in .local-pkgs ---
+step "Cleaning up old Lore files"
+# 如果 PYTHONPATH 中包含 .local-pkgs 目录，其中有老版本 Lore 文件，
 # 会导致 import cli 加载旧版。这里遍历清理。
 OLD_PYTHONPATH_DIRS=$(echo "${PYTHONPATH:-}" | tr ':' '\n' | grep '\.local-pkgs' | sort -u || true)
 if [[ -z "$OLD_PYTHONPATH_DIRS" ]]; then
     # 找不到时也检查常见开发目录
-    for dir in "$HOME/code/co-thinker/.local-pkgs" "/tmp/co-thinker-main/.local-pkgs"; do
+    for dir in "$HOME/code/Lore/.local-pkgs" "/tmp/Lore-main/.local-pkgs"; do
         if [[ -d "$dir" ]]; then
             OLD_PYTHONPATH_DIRS="$OLD_PYTHONPATH_DIRS
 $dir"
@@ -228,7 +228,7 @@ $dir"
 fi
 for dir in $OLD_PYTHONPATH_DIRS; do
     if [[ -d "$dir" ]]; then
-        info "清理 $dir 中的旧 co-thinker 文件..."
+        info "清理 $dir 中的旧 Lore 文件..."
         rm -f "$dir/cli.py" "$dir/__version__.py" "$dir/config.py"
         rm -rf "$dir/core" "$dir/api" "$dir/web"
         rm -rf "$dir/co_thinker-"*.dist-info
@@ -245,14 +245,14 @@ fi
 step "Installation complete!"
 echo ""
 echo "  mkdir my-kb && cd my-kb"
-echo "  co-thinker init"
-echo "  co-thinker start"
+echo "  Lore init"
+echo "  Lore start"
 echo ""
 
 # 提示用户加载 PATH
 if [[ -n "$SHELL_RC" ]]; then
     echo ""
-    warn "执行以下命令使 co-thinker 在当前终端生效："
+    warn "执行以下命令使 Lore 在当前终端生效："
     echo "  source $SHELL_RC"
-    echo "  或直接运行: co-thinker"
+    echo "  或直接运行: Lore"
 fi

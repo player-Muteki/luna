@@ -11,8 +11,8 @@ from core.retriever import RetrievalResults
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_RAG_SYSTEM_PROMPT = """你是 Co-Thinker，一个基于领域知识库的问答助手。
-You are Co-Thinker, a Q&A assistant grounded in a domain-specific knowledge base.
+DEFAULT_RAG_SYSTEM_PROMPT = """你是 Lore，一个基于个人知识库的问答助手。
+You are Lore, a Q&A assistant grounded in a personal knowledge base.
 
 必须遵守以下规则：
 1.  仅基于 <context> 中提供的知识库片段来回答。

@@ -32,17 +32,17 @@ def _mock_urlopen(data: bytes) -> MagicMock:
     return response
 
 
-def _make_release(tag: str, wheel_name: str = "co_thinker-9.9.9-py3-none-any.whl") -> bytes:
+def _make_release(tag: str, wheel_name: str = "lore-9.9.9-py3-none-any.whl") -> bytes:
     return json.dumps({
         "tag_name": tag,
         "assets": [
             {
-                "name": "co_thinker-0.0.1.tar.gz",
-                "browser_download_url": f"https://github.com/player-Muteki/co-thinker/releases/download/{tag}/co_thinker-0.0.1.tar.gz",
+                "name": "lore-0.0.1.tar.gz",
+                "browser_download_url": f"https://github.com/player-Muteki/lore/releases/download/{tag}/lore-0.0.1.tar.gz",
             },
             {
                 "name": wheel_name,
-                "browser_download_url": f"https://github.com/player-Muteki/co-thinker/releases/download/{tag}/{wheel_name}",
+                "browser_download_url": f"https://github.com/player-Muteki/lore/releases/download/{tag}/{wheel_name}",
             },
         ],
     }).encode()
@@ -79,7 +79,7 @@ class TestUpgrade:
 
     def test_upgrade_downloads_and_installs(self, tmp_path: Path):
         """发现新版本 → 下载 wheel → pip install --upgrade。"""
-        wheel_name = "co_thinker-9.9.9-py3-none-any.whl"
+        wheel_name = "lore-9.9.9-py3-none-any.whl"
         resp = _mock_urlopen(_make_release("v9.9.9", wheel_name))
 
         fake_wheel = tmp_path / wheel_name
@@ -111,7 +111,7 @@ class TestUpgrade:
 
     def test_upgrade_pip_install_fails(self, tmp_path: Path):
         """pip install --upgrade 返回错误 → 报错 + 提示回滚命令。"""
-        wheel_name = "co_thinker-9.9.9-py3-none-any.whl"
+        wheel_name = "lore-9.9.9-py3-none-any.whl"
         resp = _mock_urlopen(_make_release("v9.9.9", wheel_name))
 
         fake_wheel = tmp_path / wheel_name
@@ -140,7 +140,7 @@ class TestUpgrade:
 
     def test_upgrade_packaging_fallback(self, tmp_path: Path):
         """packaging 不可用 → 退回到字符串比较。"""
-        wheel_name = "co_thinker-9.9.9-py3-none-any.whl"
+        wheel_name = "lore-9.9.9-py3-none-any.whl"
         resp = _mock_urlopen(_make_release("v9.9.9", wheel_name))
 
         fake_wheel = tmp_path / wheel_name

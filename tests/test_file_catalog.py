@@ -181,8 +181,8 @@ class TestExclusions:
         assert "app.js" in {f["path"] for f in browse_files if not f["is_dir"]}
         assert all("node_modules" not in p.parts for p in ingest_files)
 
-    def test_co_thinker_excluded(self, tmp_path) -> None:
-        """.co-thinker 目录及其内容不应出现在扫描结果中。"""
+    def test_lore_excluded(self, tmp_path) -> None:
+        """.lore 目录及其内容不应出现在扫描结果中。"""
         (tmp_path / ".co-thinker" / "config.toml").parent.mkdir(parents=True)
         (tmp_path / ".co-thinker" / "config.toml").write_text(
             "[project]\nmodel = 'test'\n", encoding="utf-8"

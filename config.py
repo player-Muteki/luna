@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-# DEPRECATED — use core.project (ProjectConfig, ProjectContext) instead.
+# DEPRECATED — use core.lore (ProjectConfig, ProjectContext) instead.
 import warnings as _warnings
 
 _warnings.warn(

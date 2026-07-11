@@ -1,4 +1,4 @@
-﻿# Co-Thinker install script (Windows PowerShell)
+﻿# Lore install script (Windows PowerShell)
 # Downloads the latest .whl from GitHub and installs to a dedicated venv.
 #
 # Usage:
@@ -21,7 +21,7 @@ Write-Host "| |  | | | |_____| | | |_| || ||  \| | ' /|  _| | |_) |"
 Write-Host "| |__| |_| |_____| | |  _  || || |\  | . \| |___|  _ <"
 Write-Host " \____\___/      |_| |_| |_|___|_| \_|_|\_\_____|_| \_\"
 Write-Host ""
-Write-Host "  Co-Thinker Installer"
+Write-Host "  Lore Installer"
 
 # ── Handle local .whl or auto-download ─────────────────────
 if ($WheelPath -and (Test-Path $WheelPath)) {
@@ -29,7 +29,7 @@ if ($WheelPath -and (Test-Path $WheelPath)) {
     Write-Info "Using local file: $WheelFile"
 } else {
     Write-Step "Fetching latest release from GitHub"
-    $Repo = "player-Muteki/co-thinker"
+    $Repo = "player-Muteki/lore"
     Write-Info "Repo: $Repo"
 
     $ApiUrl = "https://api.github.com/repos/$Repo/releases/latest"
@@ -82,9 +82,9 @@ if (-not $Python) {
 }
 
 # ── 2. Install to dedicated venv (增量更新) ──────────────
-Write-Step "Installing Co-Thinker"
+Write-Step "Installing Lore"
 
-$VenDir = Join-Path $env:USERPROFILE ".co-thinker"
+$VenDir = Join-Path $env:USERPROFILE ".lore"
 $Pip = Join-Path $VenDir "Scripts\pip.exe"
 if (Test-Path $VenDir) {
     # 获取已安装版本
@@ -109,7 +109,7 @@ if (Test-Path $VenDir) {
         Write-Info "更新完成"
     }
 } else {
-    Write-Info "全新安装 Co-Thinker $WheelVersion ..."
+    Write-Info "全新安装 Lore $WheelVersion ..."
     & $Python -m venv $VenDir | Out-Null
     $pipResult = & $Pip install $WheelFile 2>&1
     if ($LASTEXITCODE -ne 0) {
@@ -133,12 +133,12 @@ if ($WebDir -and (Test-Path (Join-Path $WebDir "package.json"))) {
         if ($LASTEXITCODE -eq 0) {
             Write-Info "Frontend dependencies installed"
         } else {
-            Write-Warn "npm install failed, will retry on first 'co-thinker start'"
+            Write-Warn "npm install failed, will retry on first 'lore start'"
         }
         Pop-Location
     } else {
         Write-Warn "npm not found. Install Node.js (https://nodejs.org/) for best experience"
-        Write-Warn "First 'co-thinker start' will auto-install dependencies"
+        Write-Warn "First 'lore start' will auto-install dependencies"
     }
 } else {
     Write-Info "Web frontend package not detected, skipping frontend setup"
@@ -152,8 +152,8 @@ if (-not (Test-Path $BinDir)) {
     New-Item -ItemType Directory -Path $BinDir -Force | Out-Null
 }
 
-$BatPath = Join-Path $BinDir "co-thinker.cmd"
-$CoThinkerExe = Join-Path $VenDir "Scripts\co-thinker.exe"
+$BatPath = Join-Path $BinDir "lore.cmd"
+$CoThinkerExe = Join-Path $VenDir "Scripts\lore.exe"
 "@echo off`r`n`"$CoThinkerExe`" %*" | Set-Content -Path $BatPath
 Write-Info "Created shortcut: $BatPath"
 
@@ -166,7 +166,7 @@ if ($UserPath -notlike "*$BinDir*") {
     Write-Host "  Auto-adding to user environment variable PATH..."
     $newPath = $UserPath + ";" + $BinDir
     [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
-    Write-Info "Added. Restart your terminal for co-thinker to be available"
+    Write-Info "Added. Restart your terminal for lore to be available"
 } else {
     Write-Info "PATH already contains $BinDir"
 }
@@ -174,8 +174,8 @@ if ($UserPath -notlike "*$BinDir*") {
 # ── 6. Clean up old .local-pkgs files (dev setup residues) ────
 Write-Step "Cleaning up old co-thinker files"
 $LocalPkgsDirs = @(
-    "$env:USERPROFILE\code\co-thinker\.local-pkgs",
-    "$env:TEMP\co-thinker-main\.local-pkgs"
+    "$env:USERPROFILE\code\lore\.local-pkgs",
+    "$env:TEMP\lore-main\.local-pkgs"
 )
 foreach ($dir in $LocalPkgsDirs) {
     if (Test-Path $dir) {
@@ -201,6 +201,6 @@ Write-Host ""
 Write-Host "  To get started:"
 Write-Host ""
 Write-Host "    mkdir my-kb; cd my-kb"
-Write-Host "    co-thinker init"
-Write-Host "    co-thinker start"
+Write-Host "    lore init"
+Write-Host "    lore start"
 Write-Host ""

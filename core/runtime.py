@@ -1,5 +1,5 @@
 """
-WorkspaceRuntime — Co-Thinker 运行时 module。
+WorkspaceRuntime — Lore 运行时 module。
 
 职责：
   1. 提供 WorkspaceRuntime.bootstrap() 作为统一出厂函数

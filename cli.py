@@ -1,13 +1,13 @@
 """
-Co-Thinker CLI — 工作目录绑定型 RAG 知识库系统。
+Lore CLI — 工作目录绑定型 RAG 知识库系统。
 
 Usage:
-    co-thinker init             在当前目录创建 .co-thinker/ + 默认配置
-    co-thinker start            启动 Web UI（FastAPI + Next.js）
-    co-thinker start --port 8080
-    co-thinker run "问题"       非交互式一键问答
-    co-thinker scan             扫描工作目录，显示文件索引状态
-    co-thinker version          显示版本
+    lore init                   在当前目录创建 .co-thinker/ + 默认配置
+    lore start                  启动 Web UI（FastAPI + Next.js）
+    lore start --port 8080
+    lore run "问题"             非交互式一键问答
+    lore scan                   扫描工作目录，显示文件索引状态
+    lore version                显示版本
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ BANNER = r"""
 """
 
 app = typer.Typer(
-    name="co-thinker",
+    name="lore",
     help="基于 RAG 的工作目录知识库系统",
     add_completion=False,
     invoke_without_command=True,
@@ -126,7 +126,7 @@ def init(
         help="工作目录（默认当前目录）",
     ),
 ):
-    """在当前目录初始化 .co-thinker/ 配置目录"""
+    """在当前目录初始化知识库配置目录"""
     cwd = dir.resolve()
     cwd.mkdir(parents=True, exist_ok=True)
 
@@ -186,7 +186,7 @@ def init(
         typer.echo(f"[OK] 已存在: {GLOBAL_CONFIG_PATH}")
 
     typer.echo("")
-    typer.echo("[DONE] 初始化完成！运行 co-thinker start 启动 Web 界面。")
+    typer.echo("[DONE] 初始化完成！运行 lore start 启动 Web 界面。")
 
 
 @app.command()
@@ -195,7 +195,7 @@ def start(
     api_port: int = typer.Option(8765, "--api-port", help="API 服务端口号"),
     open_browser: bool = typer.Option(True, "--open/--no-open", help="启动后自动打开浏览器"),
 ):
-    """启动 Co-Thinker Web 界面（FastAPI + Next.js）"""
+    """启动 Lore Web 界面（FastAPI + Next.js）"""
     cwd = Path.cwd().resolve()
     print(_banner(__version__))
     typer.echo(f"[DIR] 工作目录: {cwd}")
@@ -324,7 +324,7 @@ def _npx_cmd() -> list[str]:
 def upgrade(
     yes: bool = typer.Option(False, "--yes", "-y", help="跳过确认提示"),
 ) -> None:
-    """将 Co-Thinker 更新到最新版本"""
+    """将 Lore 更新到最新版本"""
     print(_banner(__version__))
     typer.echo(f"当前版本: {__version__}")
 
@@ -355,7 +355,7 @@ def upgrade(
 
 @app.command()
 def version():
-    """显示版本与系统信息（快捷方式：co-thinker --version）"""
+    """显示版本与系统信息（快捷方式：lore --version）"""
     print(_banner(__version__))
 
     installed_path = Path(__file__).resolve().parent
@@ -377,7 +377,7 @@ def _fetch_latest_release_info() -> tuple[str, str | None, str | None]:
     import urllib.request
     import urllib.error
 
-    repo = "player-Muteki/co-thinker"
+    repo = "player-Muteki/lore"
     api_url = f"https://api.github.com/repos/{repo}/releases/latest"
     typer.echo("[INFO] 正在检查更新...")
 
@@ -468,7 +468,7 @@ def _install_wheel(wheel_path: Path) -> None:
     )
     if result.returncode != 0:
         typer.echo(f"[ERROR] 安装失败:\n{result.stderr}")
-        typer.echo(f"[INFO] 可手动回滚: pip install co-thinker=={__version__}")
+        typer.echo(f"[INFO] 可手动回滚: pip install lore=={__version__}")
         shutil.rmtree(wheel_path.parent, ignore_errors=True)
         raise typer.Exit(1)
 
@@ -484,7 +484,7 @@ def _clear_nextjs_cache() -> None:
     if next_dir.exists():
         typer.echo("[INFO] 清理前端构建缓存以触发重建...")
         shutil.rmtree(next_dir, ignore_errors=True)
-        typer.echo("[INFO] 下次 co-thinker start 将自动构建新版前端")
+        typer.echo("[INFO] 下次 lore start 将自动构建新版前端")
 
 
 
@@ -513,11 +513,11 @@ def _write_default_config(path: Path) -> None:
             "max_file_size_mb": 20,
         }
     }
-    path.write_text("# Co-Thinker Project Configuration\n" + tw.dumps(config), encoding="utf-8")
+    path.write_text("# Lore Project Configuration\n" + tw.dumps(config), encoding="utf-8")
 
 
 def _write_global_config(api_key: str) -> None:
-    """创建 ~/.co-thinkerc 全局配置文件。"""
+    """创建 ~/.lorerc 全局配置文件。"""
     import tomli_w
 
     config = {
@@ -529,8 +529,8 @@ def _write_global_config(api_key: str) -> None:
             "base_url": "https://api.deepseek.com",
         },
     }
-    path = Path.home() / ".co-thinkerc"
-    path.write_text("# Co-Thinker Global Configuration\n" + tomli_w.dumps(config), encoding="utf-8")
+    path = Path.home() / ".lorerc"
+    path.write_text("# Lore Global Configuration\n" + tomli_w.dumps(config), encoding="utf-8")
     if sys.platform != "win32":
         os.chmod(path, 0o600)
 
@@ -573,7 +573,7 @@ def _start_full_stack(web_dir: Path, port: int, api_port: int, cwd: Path, open_b
         except subprocess.TimeoutExpired:
             api_proc.kill()
             web_proc.kill()
-        typer.echo("[OK] Co-Thinker 已关闭")
+        typer.echo("[OK] Lore 已关闭")
 
 
 def _install_frontend_deps(web_dir: Path) -> bool:
@@ -633,7 +633,7 @@ def _start_api_only(api_port: int, cwd: Path) -> None:
             proc.wait(timeout=5)
         except subprocess.TimeoutExpired:
             proc.kill()
-        typer.echo("[OK] Co-Thinker 已关闭")
+        typer.echo("[OK] Lore 已关闭")
 
 
 def _ensure_npm_available() -> bool:
@@ -719,7 +719,7 @@ def _fmt_size(size_bytes: int) -> str:
 
 
 def main() -> None:
-    """Console-scripts entry point (``co-thinker``)."""
+    """Console-scripts entry point (``lore``)."""
     app()
 
 
