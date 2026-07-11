@@ -48,7 +48,7 @@ def test_add_files_replaces_chunks_when_file_changes(tmp_path: Path) -> None:
 
     stats = engine.get_index_stats()
     manifest = json.loads(
-        (tmp_path / ".co-thinker" / "vectordb" / "manifest.json").read_text(encoding="utf-8")
+        (tmp_path / ".lore" / "vectordb" / "manifest.json").read_text(encoding="utf-8")
     )
 
     assert initial.indexed_files == 1

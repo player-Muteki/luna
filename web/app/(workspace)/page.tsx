@@ -20,7 +20,7 @@ export default function WorkspaceHome() {
     <div className="min-h-full p-6 lg:p-8">
       <div className="mx-auto flex max-w-5xl flex-col gap-6">
         <header className="flex flex-col gap-2 border-b border-[var(--surface-border)] pb-6">
-          <p className="text-sm font-medium text-[var(--accent)]">Co-Thinker</p>
+          <p className="text-sm font-medium text-[var(--accent)]">Lore</p>
           <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">
             工作目录知识库
           </h1>

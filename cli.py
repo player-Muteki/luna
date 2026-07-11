@@ -2,7 +2,7 @@
 Lore CLI — 工作目录绑定型 RAG 知识库系统。
 
 Usage:
-    lore init                   在当前目录创建 .co-thinker/ + 默认配置
+    lore init                   在当前目录创建 .lore/ + 默认配置
     lore start                  启动 Web UI（FastAPI + Next.js）
     lore start --port 8080
     lore run "问题"             非交互式一键问答
@@ -25,11 +25,12 @@ import typer
 from __version__ import __version__
 
 BANNER = r"""
-  ____ ___      _____ _   _ ___ _   _ _  _______ ____
- / ___/ _ \    |_   _| | | |_ _| \ | | |/ / ____|  _ \
-| |  | | | |_____| | | |_| || ||  \| | ' /|  _| | |_) |
-| |__| |_| |_____| | |  _  || || |\  | . \| |___|  _ <
- \____\___/      |_| |_| |_|___|_| \_|_|\_\_____|_| \_\
+ _                    
+| |                   
+| |     ___  _ __ ___ 
+| |    / _ \| '__/ _ \
+| |___| (_) | | |  __/
+|______\___/|_|  \___|
 
   基于 RAG 的工作目录知识库  v{version}
 """
@@ -134,7 +135,7 @@ def init(
     typer.echo(f"[DIR] 工作目录: {cwd}")
     typer.echo("")
 
-    co_dir = cwd / ".co-thinker"
+    co_dir = cwd / ".lore"
     vectordb_dir = co_dir / "vectordb"
     config_path = co_dir / ".config.toml"
 
@@ -167,12 +168,12 @@ def init(
     else:
         typer.echo(f"[OK] 已存在: {config_path}")
 
-    # 检查全局配置 ~/.co-thinkerc
+    # 检查全局配置 ~/.lorerc
     from core.project import GLOBAL_CONFIG_PATH, _load_global_config
 
     if not GLOBAL_CONFIG_PATH.exists():
         typer.echo("")
-        typer.echo("[WARN] 未检测到全局配置 ~/.co-thinkerc")
+        typer.echo("[WARN] 未检测到全局配置 ~/.lorerc")
         if typer.confirm("  是否现在创建？（需要填入 DeepSeek API Key）", default=True):
             api_key = typer.prompt("  DeepSeek API Key", hide_input=True)
             if api_key:
@@ -200,17 +201,17 @@ def start(
     print(_banner(__version__))
     typer.echo(f"[DIR] 工作目录: {cwd}")
 
-    # 检查 .co-thinker 是否存在
-    co_dir = cwd / ".co-thinker"
+    # 检查 .lore 是否存在
+    co_dir = cwd / ".lore"
     if not co_dir.exists():
-        typer.echo("[WARN] 未检测到 .co-thinker/ 目录。请先运行 co-thinker init。")
+        typer.echo("[WARN] 未检测到 .lore/ 目录。请先运行 lore init。")
         typer.echo("")
         if not typer.confirm("是否现在就初始化？", default=True):
             raise typer.Exit(1)
         init(dir=cwd)
         typer.echo("")
 
-    os.environ.setdefault("CO_THINKER_ROOT", str(cwd))
+    os.environ.setdefault("LORE_ROOT", str(cwd))
 
     web_dir = _get_web_dir()
 
@@ -680,7 +681,7 @@ def _start_api_process(api_port: int, cwd: Path) -> subprocess.Popen:
     """启动 FastAPI 后端进程。"""
     typer.echo(f"[API] 启动 FastAPI 服务 (port {api_port})...")
     env = _sanitize_env()
-    env["CO_THINKER_ROOT"] = str(cwd)
+    env["LORE_ROOT"] = str(cwd)
 
     # 如果运行在源码环境，确保 PYTHONPATH 指向项目根目录，
     # 使 API 子进程能正确导入 core/、api/ 等模块。

@@ -4,7 +4,7 @@
 #
 # Usage:
 #   bash install.sh                    # install from GitHub Release (latest wheel)
-#   bash install.sh co_thinker-*.whl  # local .whl file
+#   bash install.sh lore-*.whl  # local .whl file
 # ============================================================
 set -euo pipefail 2>/dev/null || set -eu
 
@@ -99,7 +99,7 @@ fi
 # --- Extract wheel version ---
 WHEEL_VERSION=""
 if [[ -n "$WHEEL_PATH" && "$WHEEL_PATH" == *.whl ]]; then
-    WHEEL_VERSION=$(basename "$WHEEL_PATH" | sed -n 's/^co_thinker-\([0-9.]*\)-.*/\1/p')
+    WHEEL_VERSION=$(basename "$WHEEL_PATH" | sed -n 's/^lore-\([0-9.]*\)-.*/\1/p')
 fi
 if [[ -z "$WHEEL_VERSION" ]]; then
     WHEEL_VERSION="0.0.0"
@@ -231,7 +231,7 @@ for dir in $OLD_PYTHONPATH_DIRS; do
         info "清理 $dir 中的旧 Lore 文件..."
         rm -f "$dir/cli.py" "$dir/__version__.py" "$dir/config.py"
         rm -rf "$dir/core" "$dir/api" "$dir/web"
-        rm -rf "$dir/co_thinker-"*.dist-info
+        rm -rf "$dir/lore-"*.dist-info
         info "  ✅ 已清理"
     fi
 done

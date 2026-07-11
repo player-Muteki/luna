@@ -13,7 +13,7 @@ export default function WorkspaceLayout({
 
   // 全局自动索引：勾选"打开时一键索引"后在应用启动时自动执行
   useEffect(() => {
-    const stored = localStorage.getItem("co-thinker-auto-index");
+    const stored = localStorage.getItem("lore-auto-index");
     const autoIndex = stored !== null ? stored === "true" : true;
     if (!autoIndex) return;
 

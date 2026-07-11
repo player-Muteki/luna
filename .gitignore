@@ -1,7 +1,7 @@
-# Co-Thinker (新版)
-.co-thinker/
+# Lore
+.lore/
 
-# Co-Thinker (旧版)
+# Legacy
 .env
 
 # Python
@@ -12,7 +12,7 @@ __pycache__/
 dist/
 build/
 
-# Co-Thinker
+# DeepSeek / TDD
 .deepseek/
 
 # IDE

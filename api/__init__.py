@@ -1,1 +1,1 @@
-"""Co-Thinker HTTP API — FastAPI 层"""
+"""Lore HTTP API — FastAPI 层"""

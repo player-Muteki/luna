@@ -201,7 +201,7 @@ class IngestionEngine:
         self.config = config
         self.root = (root or Path.cwd()).resolve()
         self.embedding_model = embedding_model
-        self.co_dir = self.root / ".co-thinker"
+        self.co_dir = self.root / ".lore"
         self.vector_store = vector_store or VectorStore(self.co_dir / "vectordb" / "chunks.json")
         self.manifest = DocumentManifest(self.co_dir / "vectordb" / "manifest.json")
         self.parser_registry = parser_registry if parser_registry is not None else PARSER_REGISTRY

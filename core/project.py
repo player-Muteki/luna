@@ -3,7 +3,7 @@ ProjectContext — Lore 与工作目录的绑定桩。
 
 每个进程绑定到一个 CWD，通过它访问所有资源。
 
-全局配置 (~/.co-thinkerc)：
+全局配置 (~/.lorerc)：
   [auth]
   api_key = "sk-..."
 
@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-GLOBAL_CONFIG_PATH = Path.home() / ".co-thinkerc"
+GLOBAL_CONFIG_PATH = Path.home() / ".lorerc"
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 
 def _default_exclude_patterns() -> list[str]:
-    return [".git", "__pycache__", "node_modules", ".venv", ".co-thinker", ".DS_Store"]
+    return [".git", "__pycache__", "node_modules", ".venv", ".lore", ".DS_Store"]
 
 
 def _default_supported_extensions() -> list[str]:
@@ -49,7 +49,7 @@ def _default_supported_extensions() -> list[str]:
 
 
 def _load_global_config() -> dict[str, Any]:
-    """读取 ~/.co-thinkerc 全局配置（不存在则返回空字典）。"""
+    """读取 ~/.lorerc 全局配置（不存在则返回空字典）。"""
     path = GLOBAL_CONFIG_PATH
     if not path.exists():
         return {}
@@ -82,7 +82,7 @@ def _global_model_base_url(global_cfg: dict[str, Any] | None = None) -> str:
 
 @dataclass
 class ProjectConfig:
-    """从 .co-thinker/config.toml 读取的配置"""
+    """从 .lore/config.toml 读取的配置"""
     model: str = "deepseek-chat"
     base_url: str = "https://api.deepseek.com"
     embedding_model: str = ""
@@ -108,12 +108,12 @@ class ProjectConfig:
 
     @classmethod
     def load(cls, path: Path) -> "ProjectConfig":
-        """从项目 .co-thinker/.config.toml 加载配置，合并全局 ~/.co-thinkerc。
+        """从项目 .lore/.config.toml 加载配置，合并全局 ~/.lorerc。
 
         优先级（后者覆盖前者）：
           1. 默认值
-          2. 全局 ~/.co-thinkerc 的 [project] 段
-          3. 项目 .co-thinker/.config.toml 的 [project] 段
+          2. 全局 ~/.lorerc 的 [project] 段
+          3. 项目 .lore/.config.toml 的 [project] 段
         """
         known_keys = set(cls.__dataclass_fields__.keys())
 
@@ -183,7 +183,7 @@ class ProjectContext:
 
     def __init__(self, root: Path):
         self.root = root.resolve()
-        self.co_dir = self.root / ".co-thinker"
+        self.co_dir = self.root / ".lore"
         self.config_path = self.co_dir / "config.toml"
         self.env_path = self.co_dir / ".env"
         self.vectordb_dir = self.co_dir / "vectordb"
@@ -222,7 +222,7 @@ class ProjectContext:
         return ctx
 
     def _ensure_co_dir(self) -> None:
-        """确保 .co-thinker/ 及子目录存在。"""
+        """确保 .lore/ 及子目录存在。"""
         self.co_dir.mkdir(parents=True, exist_ok=True)
         self.vectordb_dir.mkdir(parents=True, exist_ok=True)
 
@@ -267,7 +267,7 @@ class ProjectContext:
     # ── API Key / LLM / Embedding ──────────────────────────────────
 
     def get_api_key(self) -> str:
-        """获取 API Key，优先级：进程环境变量 > ~/.co-thinkerc > .co-thinker/.env（兼容旧版）。"""
+        """获取 API Key，优先级：进程环境变量 > ~/.lorerc > .lore/.env（兼容旧版）。"""
         key = os.getenv("DEEPSEEK_API_KEY", "")
         if not key:
             key = self._global_config.get("auth", {}).get("api_key", "")
@@ -279,7 +279,7 @@ class ProjectContext:
         return key
 
     def get_llm(self) -> Any:
-        """创建 OpenAI 兼容客户端。base_url 优先级：全局 ~/.co-thinkerc > 项目配置 > 默认值。"""
+        """创建 OpenAI 兼容客户端。base_url 优先级：全局 ~/.lorerc > 项目配置 > 默认值。"""
         api_key = self.get_api_key()
         if not api_key:
             raise ValueError("DEEPSEEK_API_KEY 未设置")

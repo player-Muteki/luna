@@ -120,11 +120,11 @@ class FileCatalog:
         """核心过滤：路径是否应出现在 catalog 中。
 
         规则（优先级从高到低）：
-        1. 始终排除 .co-thinker 工作目录
+        1. 始终排除 .lore 工作目录
         2. 是否匹配 exclude_patterns 中的任意一项
         3. 是否在隐藏目录中（以 '.' 开头）
         """
-        if ".co-thinker" in path.parts:
+        if ".lore" in path.parts:
             return False
 
         if any(part in self.exclude_set for part in path.parts):

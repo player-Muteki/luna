@@ -182,7 +182,7 @@ export default function ProjectSidebar({
         {!collapsed && (
           <Link href="/chat" className="min-w-0">
             <div className="truncate text-sm font-semibold tracking-wide">
-              {info?.name || "Co-Thinker"}
+              {info?.name || "Lore"}
             </div>
             <div className="mt-0.5 text-xs text-[var(--sidebar-muted)]">
               本地知识工作区

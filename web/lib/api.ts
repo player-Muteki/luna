@@ -1,5 +1,5 @@
 /**
- * API 客户端 — 与 Co-Thinker FastAPI 后端通信。
+ * API 客户端 — 与 Lore FastAPI 后端通信。
  *
  * 所有 HTTP 请求集中在此 module。页面只调用这些方法，
  * 不直接拼 URL、不直接 fetch。

@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, KeyboardEvent } from "react";
 import { Send, Check, ChevronDown } from "lucide-react";
 
-const MODEL_KEY = "co-thinker-model";
+const MODEL_KEY = "lore-model";
 
 export interface SendOptions {
   model?: string;

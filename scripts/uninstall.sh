@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Lore 外部安装产物一键卸载
 # 运行方式: bash scripts/uninstall.sh
-# 说明: 只清理系统级安装产物，不动 code/co-thinker/ 源码目录
+# 说明: 只清理系统级安装产物，不动 code/lore/ 源码目录
 set -e
 
 echo "==> 清理 ~/.lore/（全局虚拟环境）"

@@ -3,7 +3,7 @@
 #
 # Usage:
 #   powershell -ExecutionPolicy Bypass -File install.ps1
-#   powershell -ExecutionPolicy Bypass -File install.ps1 co_thinker-0.0.11-py3-none-any.whl
+#   powershell -ExecutionPolicy Bypass -File install.ps1 lore-0.0.11-py3-none-any.whl
 # Online (no download):
 #   powershell -ExecutionPolicy Bypass -c "curl.exe -sSL URL | ..."
 
@@ -15,11 +15,12 @@ function Write-Warn($msg) { Write-Host "[WARN] $msg" -ForegroundColor Yellow }
 function Write-Error($msg){ Write-Host "[ERROR] $msg" -ForegroundColor Red }
 
 Write-Host ""
-Write-Host "  ____ ___      _____ _   _ ___ _   _ _  _______ ____"
-Write-Host " / ___/ _ \    |_   _| | | |_ _| \ | | |/ / ____|  _ \"
-Write-Host "| |  | | | |_____| | | |_| || ||  \| | ' /|  _| | |_) |"
-Write-Host "| |__| |_| |_____| | |  _  || || |\  | . \| |___|  _ <"
-Write-Host " \____\___/      |_| |_| |_|___|_| \_|_|\_\_____|_| \_\"
+Write-Host " _                    "
+Write-Host "| |                   "
+Write-Host "| |     ___  _ __ ___ "
+Write-Host "| |    / _ \| '__/ _ \"
+Write-Host "| |___| (_) | | |  __/"
+Write-Host "|______\___/|_|  \___|"
 Write-Host ""
 Write-Host "  Lore Installer"
 
@@ -61,7 +62,7 @@ if ($WheelPath -and (Test-Path $WheelPath)) {
 }
 
 # ── Extract wheel version ────────────────────────────────
-$WheelVersion = if ($WheelFile -match 'co_thinker-(\d+\.\d+\.\d+)-') { $matches[1] } else { "0.0.0" }
+$WheelVersion = if ($WheelFile -match 'lore-(\d+\.\d+\.\d+)-') { $matches[1] } else { "0.0.0" }
 
 # ── 1. Check Python ────────────────────────────────────────
 Write-Step "Checking Python"
@@ -172,14 +173,14 @@ if ($UserPath -notlike "*$BinDir*") {
 }
 
 # ── 6. Clean up old .local-pkgs files (dev setup residues) ────
-Write-Step "Cleaning up old co-thinker files"
+Write-Step "Cleaning up old lore files"
 $LocalPkgsDirs = @(
     "$env:USERPROFILE\code\lore\.local-pkgs",
     "$env:TEMP\lore-main\.local-pkgs"
 )
 foreach ($dir in $LocalPkgsDirs) {
     if (Test-Path $dir) {
-        Write-Info "清理 $dir 中的旧 co-thinker 文件..."
+        Write-Info "清理 $dir 中的旧 lore 文件..."
         $filesToRemove = @("cli.py", "__version__.py", "config.py")
         foreach ($file in $filesToRemove) {
             $f = Join-Path $dir $file
@@ -190,7 +191,7 @@ foreach ($dir in $LocalPkgsDirs) {
             $target = Join-Path $dir $d
             if (Test-Path $target) { Remove-Item $target -Recurse -Force -ErrorAction SilentlyContinue }
         }
-        Get-ChildItem "$dir\co_thinker-*.dist-info" -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
+        Get-ChildItem "$dir\lore-*.dist-info" -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
         Write-Info "  ✅ 已清理"
     }
 }

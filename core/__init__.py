@@ -1,1 +1,1 @@
-# Co-Thinker 核心逻辑包
+# Lore 核心逻辑包

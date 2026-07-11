@@ -35,7 +35,7 @@ async def chat_websocket(
 
     # ── 前置检查 ─────────────────────────────────────────────────
     if not runtime.llm:
-        await ws.send_json({"type": "error", "message": "API Key 未配置，请在 .co-thinker/.env 中设置 DEEPSEEK_API_KEY"})
+        await ws.send_json({"type": "error", "message": "API Key 未配置，请在 .lore/.env 中设置 DEEPSEEK_API_KEY"})
         await ws.close()
         return
 

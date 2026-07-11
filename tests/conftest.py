@@ -131,10 +131,10 @@ class StreamingLLM:
 def make_project_config(tmp_path: Path, **overrides: Any) -> ProjectConfig:
     """Create a ProjectConfig in a temp directory with sensible test defaults.
 
-    Sets up a minimal .co-thinker/vectordb/ structure so core module engines
+    Sets up a minimal .lore/vectordb/ structure so core module engines
     can operate.  Files should be written directly under *tmp_path*.
     """
-    co_dir = tmp_path / ".co-thinker"
+    co_dir = tmp_path / ".lore"
     (co_dir / "vectordb").mkdir(parents=True, exist_ok=True)
 
     config = ProjectConfig.load(co_dir / "config.toml")
@@ -182,7 +182,7 @@ def build_retrieval_results(
 
 def make_runtime(tmp_path: Path) -> WorkspaceRuntime:
     """创建带假引擎的 WorkspaceRuntime，用于测试。"""
-    co_dir = tmp_path / ".co-thinker"
+    co_dir = tmp_path / ".lore"
     (co_dir / "vectordb").mkdir(parents=True, exist_ok=True)
 
     ctx = ProjectContext(tmp_path)
