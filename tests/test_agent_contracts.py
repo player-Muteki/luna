@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from core.agent_contracts import list_tool_contracts
 from core.agent_runtime import RustAgentRuntime
 from core.agent_tools import KnowledgeToolset
@@ -28,6 +30,8 @@ def test_contracts_have_schema_and_category():
 
 def test_rust_contracts_match_python_contracts():
     runtime = RustAgentRuntime()
+    if not runtime.available:
+        pytest.skip("Rust agent runtime not available")
     rust_tools = {tool["name"]: tool for tool in runtime.list_tools()["tools"]}
     python_tools = {contract.name: contract for contract in list_tool_contracts()}
 
