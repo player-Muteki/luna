@@ -23,6 +23,7 @@ from typing import Any, TYPE_CHECKING
 if TYPE_CHECKING:
     from core.agent_runtime import RustAgentRuntime
     from core.agent_tools import KnowledgeToolset
+    from core.agent_workflow import AgentWorkflow
     from core.project import ProjectConfig
     from core.protocols import (
         AgentToolRuntime,
@@ -69,6 +70,7 @@ class WorkspaceRuntime:
         self._ctx = ctx
         self._agent_toolset: KnowledgeToolset | None = None
         self._agent_runtime: RustAgentRuntime | None = None
+        self._agent_workflow: AgentWorkflow | None = None
     # ── 公开 ctx 属性 ────────────────────────────────────────────
 
     @property
@@ -186,6 +188,13 @@ class WorkspaceRuntime:
 
             self._agent_runtime = RustAgentRuntime(toolset=self.get_agent_toolset())
         return self._agent_runtime
+
+    def get_agent_workflow(self) -> "AgentWorkflow":
+        if self._agent_workflow is None:
+            from core.agent_workflow import AgentWorkflow
+
+            self._agent_workflow = AgentWorkflow(self)
+        return self._agent_workflow
 
     # ── 向后兼容委托属性 ──────────────────────────────────────────
     #

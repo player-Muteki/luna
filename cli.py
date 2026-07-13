@@ -42,6 +42,8 @@ app = typer.Typer(
     add_completion=False,
     invoke_without_command=True,
 )
+agent_app = typer.Typer(help="知识库 Agent 命令")
+app.add_typer(agent_app, name="agent")
 
 
 @app.callback(invoke_without_command=True)
@@ -277,6 +279,155 @@ def run(
         typer.echo("── 引用来源 ──")
         for i, ref in enumerate(result.references[:5], 1):
             typer.echo(f"  [{i}] {ref.get('source_path', 'unknown')} (score: {ref.get('score', 0):.3f})")
+
+
+def _emit_agent_events(events, *, json_output: bool = False) -> None:
+    for event in events:
+        payload = event.to_dict()
+        if json_output:
+            typer.echo(json.dumps(payload, ensure_ascii=False))
+            continue
+
+        event_type = payload["type"]
+        if event_type == "tool_call_start":
+            typer.echo(f"[tool] {payload.get('tool_name')} {json.dumps(payload.get('arguments', {}), ensure_ascii=False)}")
+        elif event_type == "tool_call_result":
+            typer.echo(f"[result] {payload.get('tool_name')}")
+            if payload.get("body"):
+                typer.echo(json.dumps(payload["body"], ensure_ascii=False, indent=2))
+        elif event_type == "approval_required":
+            typer.echo(f"[approval_required] {payload.get('tool_name')}")
+            if payload.get("approval_id"):
+                typer.echo(f"approval_id: {payload['approval_id']}")
+            if payload.get("message"):
+                typer.echo(payload["message"])
+        elif event_type == "plan_created":
+            typer.echo(f"[plan] {payload.get('plan_id')}")
+            if payload.get("message"):
+                typer.echo(payload["message"])
+        elif event_type == "error":
+            typer.echo(f"[error] {payload.get('error')}")
+        elif payload.get("message"):
+            typer.echo(payload["message"])
+
+
+@agent_app.callback()
+def agent() -> None:
+    """知识库 Agent 命令。"""
+
+
+@agent_app.command("run")
+def agent_run(
+    goal: str = typer.Argument(..., help="Agent 目标"),
+    plan: bool = typer.Option(False, "--plan", help="只读计划模式"),
+    goal_mode: bool = typer.Option(False, "--goal", help="目标模式"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="自动执行低风险变更工具"),
+    dir: str | None = typer.Option(None, "--dir", help="项目目录（默认当前目录）"),
+    json_output: bool = typer.Option(False, "--json", help="输出 JSONL 事件"),
+) -> None:
+    """运行知识库 Agent。"""
+    from core.agent_modes import AgentMode, ApprovalMode
+
+    mode = AgentMode.PLAN if plan else AgentMode.GOAL if goal_mode else AgentMode.DEFAULT
+    approval_mode = ApprovalMode.AUTO_SAFE_MUTATION if yes else ApprovalMode.ASK
+    runtime = _setup_project_context(dir)
+    events = runtime.get_agent_workflow().execute(
+        goal,
+        mode=mode,
+        approval_mode=approval_mode,
+    )
+    _emit_agent_events(events, json_output=json_output)
+
+
+@agent_app.command("plans")
+def agent_plans(
+    dir: str | None = typer.Option(None, "--dir", help="项目目录（默认当前目录）"),
+    json_output: bool = typer.Option(False, "--json", help="输出 JSON"),
+) -> None:
+    """列出已保存的 Agent 计划。"""
+    runtime = _setup_project_context(dir)
+    plans = [plan.to_dict() for plan in runtime.get_agent_workflow().list_plans()]
+    if json_output:
+        typer.echo(json.dumps({"plans": plans}, ensure_ascii=False, indent=2))
+        return
+    for plan in plans:
+        typer.echo(f"{plan['id']}  {plan['status']}  {plan['goal']}")
+
+
+@agent_app.command("approvals")
+def agent_approvals(
+    dir: str | None = typer.Option(None, "--dir", help="项目目录（默认当前目录）"),
+    json_output: bool = typer.Option(False, "--json", help="输出 JSON"),
+) -> None:
+    """列出待审批的 Agent 工具调用。"""
+    runtime = _setup_project_context(dir)
+    approvals = [approval.to_dict() for approval in runtime.get_agent_workflow().list_approvals()]
+    if json_output:
+        typer.echo(json.dumps({"approvals": approvals}, ensure_ascii=False, indent=2))
+        return
+    for approval in approvals:
+        typer.echo(f"{approval['id']}  {approval['status']}  {approval['tool_name']}  {approval['reason']}")
+
+
+@agent_app.command("approve")
+def agent_approve(
+    approval_id: str = typer.Argument(..., help="审批 ID"),
+    dir: str | None = typer.Option(None, "--dir", help="项目目录（默认当前目录）"),
+    json_output: bool = typer.Option(False, "--json", help="输出 JSON"),
+) -> None:
+    """批准并执行一个 Agent 工具调用。"""
+    runtime = _setup_project_context(dir)
+    workflow = runtime.get_agent_workflow()
+    approval = workflow.approve(approval_id)
+    payload = approval.to_dict()
+    if json_output:
+        typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        typer.echo(f"[approved] {approval.id} {approval.tool_name}")
+
+    events = workflow.execute_approved(approval_id)
+    _emit_agent_events(events, json_output=json_output)
+
+
+@agent_app.command("reject")
+def agent_reject(
+    approval_id: str = typer.Argument(..., help="审批 ID"),
+    dir: str | None = typer.Option(None, "--dir", help="项目目录（默认当前目录）"),
+    json_output: bool = typer.Option(False, "--json", help="输出 JSON"),
+) -> None:
+    """拒绝一个 Agent 工具调用。"""
+    runtime = _setup_project_context(dir)
+    approval = runtime.get_agent_workflow().reject(approval_id)
+    payload = approval.to_dict()
+    if json_output:
+        typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
+        return
+    typer.echo(f"[rejected] {approval.id} {approval.tool_name}")
+
+
+@agent_app.command("sessions")
+def agent_sessions(
+    dir: str | None = typer.Option(None, "--dir", help="项目目录（默认当前目录）"),
+    json_output: bool = typer.Option(False, "--json", help="输出 JSON"),
+) -> None:
+    """列出 Agent 会话。"""
+    runtime = _setup_project_context(dir)
+    sessions = [session.to_dict() for session in runtime.get_agent_workflow().list_sessions()]
+    if json_output:
+        typer.echo(json.dumps({"sessions": sessions}, ensure_ascii=False, indent=2))
+        return
+    for session in sessions:
+        typer.echo(f"{session['id']}  {session['status']}  {session['mode']}  {session['goal']}")
+
+
+@agent_app.command("show")
+def agent_show(
+    session_id: str = typer.Argument(..., help="Agent session ID"),
+    dir: str | None = typer.Option(None, "--dir", help="项目目录（默认当前目录）"),
+) -> None:
+    """显示 Agent 会话事件。"""
+    runtime = _setup_project_context(dir)
+    typer.echo(json.dumps({"events": runtime.get_agent_workflow().read_session(session_id)}, ensure_ascii=False, indent=2))
 
 
 @app.command()

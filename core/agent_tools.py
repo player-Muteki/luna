@@ -14,8 +14,19 @@ class KnowledgeToolset:
     def __init__(self, runtime: "WorkspaceRuntime"):
         self._runtime = runtime
 
+    def tool_names(self) -> list[str]:
+        return list(self._handlers())
+
     def call(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
-        handlers = {
+        handlers = self._handlers()
+        try:
+            handler = handlers[name]
+        except KeyError as exc:
+            raise ValueError(f"Unknown knowledge tool: {name}") from exc
+        return handler(arguments or {})
+
+    def _handlers(self) -> dict[str, Any]:
+        return {
             "kb_get_stats": self._kb_get_stats,
             "kb_list_files": self._kb_list_files,
             "kb_list_documents": self._kb_list_documents,
@@ -26,11 +37,6 @@ class KnowledgeToolset:
             "kb_update_tags": self._kb_update_tags,
             "kb_clear_index": self._kb_clear_index,
         }
-        try:
-            handler = handlers[name]
-        except KeyError as exc:
-            raise ValueError(f"Unknown knowledge tool: {name}") from exc
-        return handler(arguments or {})
 
     def _kb_get_stats(self, arguments: dict[str, Any]) -> dict[str, Any]:
         return self._runtime.get_stats()

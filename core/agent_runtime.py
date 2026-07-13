@@ -30,10 +30,11 @@ class RustAgentRuntime:
     def check_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         return self._rpc("tools/check", {"name": name, "arguments": arguments})
 
-    def call_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
-        policy = self.check_tool(name, arguments)
-        if policy.get("status") != "allowed":
-            return policy
+    def call_tool(self, name: str, arguments: dict[str, Any], *, skip_policy: bool = False) -> dict[str, Any]:
+        if not skip_policy:
+            policy = self.check_tool(name, arguments)
+            if policy.get("status") != "allowed":
+                return policy
         if self._toolset is None:
             raise RuntimeError("KnowledgeToolset is not configured")
 
