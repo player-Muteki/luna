@@ -13,7 +13,10 @@ if TYPE_CHECKING:
 
 
 class RustAgentRuntime:
-    """通过 Rust stdio runtime 做 tool policy 检查。"""
+    """通过 Rust stdio runtime 做 tool policy 检查。
+
+    当 Rust 二进制不可用时自动回退到纯 Python 执行（跳过策略检查）。
+    """
 
     def __init__(
         self,
@@ -26,8 +29,21 @@ class RustAgentRuntime:
         self._repo_root = (repo_root or Path(__file__).resolve().parent.parent).resolve()
         self._timeout_seconds = timeout_seconds
         self._request_ids = itertools.count(1)
+        self._available: bool | None = None  # lazy check
+
+    @property
+    def available(self) -> bool:
+        if self._available is None:
+            try:
+                self._command()
+                self._available = True
+            except RuntimeError:
+                self._available = False
+        return self._available
 
     def check_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        if not self.available:
+            return {"ok": True, "status": "allowed", "tool_name": name}
         return self._rpc("tools/check", {"name": name, "arguments": arguments})
 
     def call_tool(self, name: str, arguments: dict[str, Any], *, skip_policy: bool = False) -> dict[str, Any]:

@@ -3,9 +3,10 @@ name: Release
 # 推送 v* 标签时全自动发布：
 #   1. 验证 tag 与 __version__.py 一致
 #   2. 构建 sdist + wheel
-#   3. 校验 wheel 可安装可用
-#   4. 自动创建 GitHub Release
-#   5. 上传构建产物到 Release 附件
+#   3. 构建 Rust agent runtime 二进制
+#   4. 校验 wheel 可安装可用
+#   5. 自动创建 GitHub Release
+#   6. 上传 wheel + Rust 二进制到 Release 附件
 #
 # 使用方式：
 #   git commit -am "release: v0.2.0"
@@ -63,13 +64,42 @@ jobs:
           python -m pip install dist/*.whl
           luna version
 
+      - name: Set up Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Build Rust agent runtime
+        run: cargo build --release --package luna-agent-runtime
+
+      - name: Package Rust binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG_RAW="${GITHUB_REF_NAME}"
+          BIN="target/release/luna-agent-runtime"
+          if [ -f "$BIN" ]; then
+            ARCHIVE="luna-agent-runtime-x86_64-unknown-linux-gnu-${TAG_RAW}.tar.gz"
+            tar -czf "$ARCHIVE" -C target/release luna-agent-runtime
+            mv "$ARCHIVE" dist/
+            echo "✅ Rust binary packaged: $ARCHIVE"
+          else
+            echo "⚠️  Rust binary not found, skipping"
+          fi
+
       - name: Create Release & upload assets
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ github.ref_name }}"
+          # 收集所有附件（wheel + Rust 二进制）
+          ASSETS=()
+          for f in dist/*.tar.gz dist/*.whl; do
+            if [ -f "$f" ]; then
+              ASSETS+=("$f")
+            fi
+          done
           gh release create "$TAG" \
             --title "$TAG" \
             --generate-notes \
-            dist/*.tar.gz \
-            dist/*.whl
+            "${ASSETS[@]}"

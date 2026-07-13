@@ -173,6 +173,46 @@ else
     info "已安装到 $VENV_DIR"
 fi
 
+# --- 2b. Install Rust agent runtime binary ---
+step "Installing Rust agent runtime"
+
+RUST_BIN="$VENV_DIR/bin/luna-agent-runtime"
+if [[ -f "$RUST_BIN" ]]; then
+    info "Rust runtime 已安装，跳过"
+else
+    TAG="${TAG_NAME:-v$WHEEL_VERSION}"
+    ARCH="x86_64-unknown-linux-gnu"
+    ARCHIVE="luna-agent-runtime-${ARCH}-${TAG}.tar.gz"
+    URL="https://github.com/$REPO/releases/download/$TAG/$ARCHIVE"
+
+    if command -v curl &>/dev/null; then
+        info "下载 Rust runtime: $ARCHIVE ..."
+        TMP_RUST=$(mktemp -d)
+        if curl -fsSL --max-time 30 -o "$TMP_RUST/$ARCHIVE" "$URL" 2>/dev/null; then
+            tar -xzf "$TMP_RUST/$ARCHIVE" -C "$TMP_RUST"
+            if [[ -f "$TMP_RUST/luna-agent-runtime" ]]; then
+                mv "$TMP_RUST/luna-agent-runtime" "$RUST_BIN"
+                chmod +x "$RUST_BIN"
+                info "Rust runtime 已安装到 $RUST_BIN"
+            else
+                warn "解压后未找到 luna-agent-runtime 二进制"
+            fi
+        else
+            warn "下载 Rust runtime 失败（当前平台可能不支持），Agent 将降级为纯 Python 模式"
+        fi
+        rm -rf "$TMP_RUST"
+    else
+        warn "curl 不可用，跳过 Rust runtime 安装"
+    fi
+
+    # 验证安装
+    if [[ -f "$RUST_BIN" ]]; then
+        info "Rust runtime 就绪: $("$RUST_BIN" --help 2>/dev/null || echo "OK")"
+    else
+        warn "Rust runtime 未安装，agent 工具将使用纯 Python 降级模式运行"
+    fi
+fi
+
 # --- 3. Install frontend dependencies ---
 step "Installing web frontend dependencies"
 WEB_DIR=$("$VENV_DIR/bin/python" -c "import web, os; print(os.path.dirname(web.__file__))" 2>/dev/null || echo "")

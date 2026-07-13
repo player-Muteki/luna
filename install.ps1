@@ -138,6 +138,39 @@ if (Test-Path $VenDir) {
     Write-Info "已安装到 $VenDir"
 }
 
+# ── 2b. Install Rust agent runtime binary ──────────────
+Write-Step "Installing Rust agent runtime"
+
+$RustBin = Join-Path $VenDir "Scripts\luna-agent-runtime.exe"
+if (Test-Path $RustBin) {
+    Write-Info "Rust runtime 已安装，跳过"
+} else {
+    $Tag = if ($ReleaseData.tag_name) { $ReleaseData.tag_name } else { "v$WheelVersion" }
+    $Arch = "x86_64-pc-windows-msvc"
+    $ArchiveName = "luna-agent-runtime-${Arch}-${Tag}.zip"
+    $RustUrl = "https://github.com/$Repo/releases/download/$Tag/$ArchiveName"
+
+    Write-Info "Downloading Rust runtime: $ArchiveName"
+    try {
+        $RustZip = Join-Path $env:TEMP $ArchiveName
+        Invoke-WebRequest -Uri $RustUrl -OutFile $RustZip -UseBasicParsing -ErrorAction Stop
+        $RustTmp = Join-Path $env:TEMP "luna-runtime-extract"
+        if (Test-Path $RustTmp) { Remove-Item $RustTmp -Recurse -Force }
+        New-Item -ItemType Directory -Path $RustTmp -Force | Out-Null
+        Expand-Archive -Path $RustZip -DestinationPath $RustTmp -Force
+        $ExtractedBin = Get-ChildItem $RustTmp -Recurse -Filter "luna-agent-runtime.exe" | Select-Object -First 1
+        if ($ExtractedBin) {
+            Move-Item $ExtractedBin.FullName $RustBin -Force
+            Write-Info "Rust runtime 已安装到 $RustBin"
+        } else {
+            Write-Warn "解压后未找到 luna-agent-runtime.exe"
+        }
+        Remove-Item $RustTmp -Recurse -Force
+    } catch {
+        Write-Warn "下载 Rust runtime 失败，Agent 将降级为纯 Python 模式: $_"
+    }
+}
+
 # ── 3. Install web frontend dependencies ─────────────────────
 Write-Step "Installing web frontend dependencies"
 $WebDir = & $Python -c "import web, os; print(os.path.dirname(web.__file__))" 2>$null
