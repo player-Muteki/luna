@@ -14,7 +14,7 @@ runner = CliRunner()
 
 
 class _FakeAgentWorkflow:
-    def execute(self, goal, *, mode, approval_mode):
+    def execute(self, goal, *, mode, approval_mode, generate_response=False):
         yield AgentEvent(type=AgentEventType.MESSAGE, session_id="ags_1", message=f"goal: {goal}")
         yield AgentEvent(type=AgentEventType.DONE, session_id="ags_1", message="done")
 

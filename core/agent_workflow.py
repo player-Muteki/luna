@@ -37,6 +37,7 @@ class AgentWorkflow:
         session_id: str | None = None,
         mode: AgentMode = AgentMode.DEFAULT,
         approval_mode: ApprovalMode = ApprovalMode.ASK,
+        generate_response: bool = False,
     ) -> Iterable[AgentEvent]:
         session = self._session_store.create(goal, mode, session_id)
         yield from self._emit(AgentEvent(
@@ -56,6 +57,7 @@ class AgentWorkflow:
                 message="已生成计划，未执行变更操作。",
             ))
 
+        tool_results: list[AgentEvent] = []
         for step in plan.steps:
             for event in self._executor.execute(
                 step,
@@ -64,12 +66,88 @@ class AgentWorkflow:
                 approval_mode=approval_mode,
             ):
                 yield from self._emit(event)
+                if event.type == AgentEventType.TOOL_CALL_RESULT:
+                    tool_results.append(event)
+
+        if generate_response and tool_results and mode != AgentMode.PLAN:
+            response = self._generate_response(goal, tool_results)
+            if response:
+                yield from self._emit(AgentEvent(
+                    type=AgentEventType.MESSAGE,
+                    session_id=session.id,
+                    message=response,
+                ))
 
         yield from self._emit(AgentEvent(
             type=AgentEventType.DONE,
             session_id=session.id,
             message="Agent 处理完成。" if mode != AgentMode.PLAN else "计划生成完成。",
         ))
+
+    def _generate_response(self, goal: str, tool_results: list[AgentEvent]) -> str | None:
+        llm = getattr(self._runtime, "llm", None)
+        if llm is None:
+            return None
+
+        prompt_lines = [
+            "你是一个知识库管理助手。请根据用户目标和工具执行结果，用简洁的自然语言总结发生了什么。",
+            "",
+            f"用户目标：{goal}",
+            "",
+            "工具执行结果：",
+        ]
+        for event in tool_results:
+            body = event.body or {}
+            if event.tool_name == "kb_get_stats":
+                prompt_lines.append(f"- 知识库统计：{body.get('document_count', 0)} 个文档，{body.get('chunk_count', 0)} 个片段")
+            elif event.tool_name == "kb_search":
+                results = body.get("results", [])
+                prompt_lines.append(f"- 搜索到 {len(results)} 个相关结果")
+            elif event.tool_name == "kb_index_files":
+                prompt_lines.append(f"- 已索引 {body.get('indexed_files', 0)} 个文件，{body.get('total_chunks', 0)} 个片段")
+            elif event.tool_name == "kb_rebuild_index":
+                prompt_lines.append(f"- 重建索引完成：{body.get('indexed_files', 0)} 个文件，{body.get('failed_files', 0)} 个失败")
+            elif event.tool_name == "kb_list_files":
+                files = body.get("files", [])
+                indexed = sum(1 for f in files if f.get("is_indexed"))
+                prompt_lines.append(f"- 工作区共 {len(files)} 个文件，{indexed} 个已索引")
+            elif event.tool_name == "kb_list_documents":
+                docs = body.get("documents", [])
+                prompt_lines.append(f"- 共 {len(docs)} 个文档")
+            elif event.tool_name == "kb_delete_document":
+                prompt_lines.append(f"- 文档已删除：{body.get('document_id', 'unknown')}")
+            elif event.tool_name == "kb_update_tags":
+                prompt_lines.append(f"- 标签已更新")
+            else:
+                prompt_lines.append(f"- {event.tool_name} 执行完成")
+
+        prompt_lines.extend([
+            "",
+            "请用简洁的语言总结结果，不要超过 200 字。",
+        ])
+
+        try:
+            response = llm.chat.completions.create(
+                model=self._get_llm_model_name(),
+                messages=[
+                    {"role": "system", "content": "你是一个知识库管理助手，用简洁的中文总结工具执行结果。"},
+                    {"role": "user", "content": "\n".join(prompt_lines)},
+                ],
+                max_tokens=500,
+                temperature=0.3,
+            )
+            return response.choices[0].message.content
+        except Exception:
+            return None
+
+    @staticmethod
+    def _get_llm_model_name() -> str:
+        try:
+            from core.project import load_settings
+            settings = load_settings()
+            return settings.get("model", {}).get("name", "deepseek-chat")
+        except Exception:
+            return "deepseek-chat"
 
     def _emit(self, event: AgentEvent) -> Iterable[AgentEvent]:
         self._session_store.append(event.session_id, event)

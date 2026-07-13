@@ -322,6 +322,7 @@ def agent_run(
     plan: bool = typer.Option(False, "--plan", help="只读计划模式"),
     goal_mode: bool = typer.Option(False, "--goal", help="目标模式"),
     yes: bool = typer.Option(False, "--yes", "-y", help="自动执行低风险变更工具"),
+    respond: bool = typer.Option(False, "--respond", "-r", help="执行后生成 LLM 响应总结"),
     dir: str | None = typer.Option(None, "--dir", help="项目目录（默认当前目录）"),
     json_output: bool = typer.Option(False, "--json", help="输出 JSONL 事件"),
 ) -> None:
@@ -335,6 +336,7 @@ def agent_run(
         goal,
         mode=mode,
         approval_mode=approval_mode,
+        generate_response=respond,
     )
     _emit_agent_events(events, json_output=json_output)
 

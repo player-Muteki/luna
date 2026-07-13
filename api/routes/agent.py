@@ -39,6 +39,7 @@ async def agent_run(
 
     mode_name = body.get("mode", "default")
     approval_mode_name = body.get("approval_mode", "ask")
+    generate_response = body.get("generate_response", False)
 
     try:
         mode = AgentMode(mode_name)
@@ -51,7 +52,7 @@ async def agent_run(
         raise HTTPException(status_code=400, detail=f"Invalid approval_mode: {approval_mode_name}")
 
     return StreamingResponse(
-        _stream_agent_events(runtime, goal, mode, approval_mode, request),
+        _stream_agent_events(runtime, goal, mode, approval_mode, generate_response, request),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -65,6 +66,7 @@ async def _stream_agent_events(
     goal: str,
     mode: AgentMode,
     approval_mode: ApprovalMode,
+    generate_response: bool,
     request: Request,
 ) -> Any:
     """在后台线程运行 sync workflow.execute()，通过 SSE 推送事件。"""
@@ -74,7 +76,7 @@ async def _stream_agent_events(
     def _produce() -> None:
         try:
             workflow = runtime.get_agent_workflow()
-            for event in workflow.execute(goal, mode=mode, approval_mode=approval_mode):
+            for event in workflow.execute(goal, mode=mode, approval_mode=approval_mode, generate_response=generate_response):
                 _put_on_queue(loop, queue, event.to_dict())
         except Exception as exc:
             logger.exception("Agent workflow error")
