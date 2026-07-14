@@ -64,14 +64,16 @@ print(d.get('tag_name',''))
             fi
         fi
 
-        # API 失败时（无 token / 速率限制），通过重定向获取最新 tag 并直接构造 URL
+        # API 失败时（无 token / 速率限制），通过 gh CLI 或 git 标签获取最新版本
         if [[ -z "$WHEEL_URL" ]]; then
-            LATEST_TAG=$(curl -sIL -o /dev/null -w '%{url_effective}' "https://github.com/$REPO/releases/latest" 2>/dev/null || true)
-            LATEST_TAG=$(basename "$LATEST_TAG" 2>/dev/null || true)
-            if [[ -n "$LATEST_TAG" ]]; then
-                TAG_NAME="$LATEST_TAG"
-                TAG_VERSION="${LATEST_TAG#v}"
-                WHEEL_URL="https://github.com/$REPO/releases/download/$LATEST_TAG/luna-$TAG_VERSION-py3-none-any.whl"
+            if command -v gh &>/dev/null; then
+                TAG_NAME=$(gh release list --repo "$REPO" --limit 1 --json tagName --jq '.[0].tagName' 2>/dev/null || true)
+            elif command -v git &>/dev/null; then
+                TAG_NAME=$(git ls-remote --tags --ref "https://github.com/$REPO.git" 2>/dev/null | grep -oP 'v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1 || true)
+            fi
+            if [[ -n "$TAG_NAME" ]]; then
+                TAG_VERSION="${TAG_NAME#v}"
+                WHEEL_URL="https://github.com/$REPO/releases/download/$TAG_NAME/luna-$TAG_VERSION-py3-none-any.whl"
             fi
         fi
 
