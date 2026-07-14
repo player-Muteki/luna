@@ -142,12 +142,9 @@ class AgentWorkflow:
 
     @staticmethod
     def _get_llm_model_name() -> str:
-        try:
-            from core.project import load_settings
-            settings = load_settings()
-            return settings.get("model", {}).get("name", "deepseek-chat")
-        except Exception:
-            return "deepseek-chat"
+        from core.project import _load_global_config, _global_model_name
+        cfg = _load_global_config()
+        return _global_model_name(cfg) or "deepseek-chat"
 
     def _emit(self, event: AgentEvent) -> Iterable[AgentEvent]:
         self._session_store.append(event.session_id, event)

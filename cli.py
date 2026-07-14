@@ -25,8 +25,9 @@ import typer
 
 from __version__ import __version__
 
-BANNER_SUBTITLE = "基于 RAG 的工作目录知识库  v{version}"
-BANNER_YELLOW = "\033[38;5;229m"
+BANNER_GOLD = "\033[38;5;220m"
+BANNER_GRAY = "\033[38;5;244m"
+BANNER_DIM = "\033[38;5;239m"
 BANNER_RESET = "\033[0m"
 
 
@@ -106,7 +107,11 @@ def _banner(version: str) -> str:
         art = _render_ascii_banner()
     except Exception:
         art = "luna"
-    return f"{BANNER_YELLOW}{art}{BANNER_RESET}\n\n  {BANNER_SUBTITLE.format(version=version)}\n"
+    return (
+        f"{BANNER_GOLD}{art}{BANNER_RESET}\n"
+        f"  {BANNER_GRAY}基于 RAG 的工作目录知识库{BANNER_RESET}\n"
+        f"  {BANNER_DIM}v{version}{BANNER_RESET}\n"
+    )
 
 
 def _render_ascii_banner() -> str:
@@ -116,12 +121,12 @@ def _render_ascii_banner() -> str:
 def _render_ascii_moon() -> str:
     from PIL import Image, ImageDraw
 
-    width, height = 11, 6
-    size = 180
+    width, height = 16, 8
+    size = 300
     image = Image.new("L", (size, size), 0)
     draw = ImageDraw.Draw(image)
-    draw.ellipse((18, 16, 166, 164), fill=255)
-    draw.ellipse((64, 8, 184, 156), fill=0)
+    draw.ellipse((30, 28, 278, 274), fill=255)
+    draw.ellipse((108, 14, 310, 262), fill=0)
 
     bbox = image.getbbox()
     if bbox:
@@ -129,25 +134,27 @@ def _render_ascii_moon() -> str:
 
     image = image.resize((width, height), Image.Resampling.LANCZOS)
     pixels = image.load()
-    mask = [[pixels[x, y] >= 96 for x in range(width)] for y in range(height)]
-    chars = [[" " for _ in range(width)] for _ in range(height)]
 
+    chars = []
     for y in range(height):
+        row = []
         for x in range(width):
-            if mask[y][x]:
-                chars[y][x] = "█"
+            v = pixels[x, y]
+            if v >= 208:
+                row.append("█")
+            elif v >= 144:
+                row.append("▓")
+            elif v >= 80:
+                row.append("▒")
+            elif v >= 24:
+                row.append("░")
+            else:
+                row.append(" ")
+        line = "".join(row).rstrip()
+        if line.strip():
+            chars.append(line)
 
-    for y in range(height):
-        for x in range(width):
-            if not mask[y][x]:
-                continue
-            for dx, dy, shadow in ((1, 0, "╗"), (0, 1, "╚"), (1, 1, "╝")):
-                nx, ny = x + dx, y + dy
-                if nx >= width or ny >= height or mask[ny][nx]:
-                    continue
-                chars[ny][nx] = shadow
-
-    return "\n".join(line for row in chars if (line := "".join(row).rstrip()).strip())
+    return "\n".join(chars)
 
 
 def _render_ascii_text() -> str:

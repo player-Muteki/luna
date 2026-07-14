@@ -2,8 +2,7 @@
 recursive-include web/app *
 recursive-include web/components *
 recursive-include web/lib *
-recursive-include web/public *
-include web/*.json web/*.js web/*.ts web/*.mjs web/*.css web/__init__.py
+include web/*.json web/*.js web/*.ts web/__init__.py
 
 # 排除运行时和依赖目录
 prune web/node_modules

@@ -1,5 +1,19 @@
 # Changelog
 
+## [v0.0.3] - 2026-07-14
+
+### ✨ Features
+- 改进 CLI banner 的 ASCII 月亮渲染（更高分辨率、灰度过渡）
+- 修复 CLI banner 色彩主题（金色月亮 + 灰色副标题）
+
+### 🐛 Bug Fixes
+- 修复 `agent_workflow.py` 中 `_get_llm_model_name` 引用不存在的 `load_settings` 函数的问题
+
+### 🧹 Chores
+- 版本号更新至 v0.0.3
+
+---
+
 ## [v0.0.1] - 2026-07-11
 
 ### ✨ Features

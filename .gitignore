@@ -4,6 +4,15 @@
 # Legacy
 .env
 
+# AI tool artifacts
+.agents/
+.claude/
+.codex/
+.deepseek/
+
+# Project rename remnants
+lore-dev.sh
+
 # Python
 __pycache__/
 *.pyc

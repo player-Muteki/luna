@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "基于 RAG 的个人知识问答系统"
 requires-python = ">=3.10"
 readme = "README.md"
-license = {text = "MIT"}
+license = "MIT"
 authors = [
     {name = "Luna Contributors"},
 ]
@@ -67,6 +67,7 @@ version = {attr = "__version__.__version__"}
 [tool.setuptools]
 py-modules = ["cli", "config", "__version__"]
 packages = ["core", "api", "api.routes", "web"]
+include-package-data = false
 
 [tool.setuptools.package-data]
 web = [
@@ -74,7 +75,6 @@ web = [
     "app/**/*",
     "components/**/*",
     "lib/**/*",
-    "public/**/*",
     "package.json",
     "package-lock.json",
     "next.config.js",
@@ -82,7 +82,11 @@ web = [
     "tsconfig.json",
     "tailwind.config.ts",
     "postcss.config.js",
-    "globals.css",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = ["__pycache__", ".*"]
+filterwarnings = ["default::DeprecationWarning"]
 
 
