@@ -31,41 +31,59 @@ else
 
     TMP_DIR=$(mktemp -d)
 
-    # Try to download wheel from GitHub Release via API
+    # 尝试从 GitHub Release 下载 wheel
     if command -v curl &>/dev/null; then
         # 如有 GH_TOKEN 则附带认证，避免 API 速率限制
         GH_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
-        CURL_AUTH=""
+        CURL_AUTH=()
         if [[ -n "$GH_TOKEN" ]]; then
-            CURL_AUTH="-H \"Authorization: Bearer $GH_TOKEN\""
+            CURL_AUTH=(-H "Authorization: Bearer $GH_TOKEN")
         fi
-        API_OUT=$(curl -fsSL --max-time 15 $CURL_AUTH "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null || true)
+
+        # 优先通过 GitHub API 获取最新 release 信息
+        API_OUT=$(curl -fsSL --max-time 15 "${CURL_AUTH[@]}" "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null || true)
         if [[ -n "$API_OUT" ]]; then
-            # 优先用 Python 解析 JSON（更可靠），fallback 到 grep/sed
+            # 解析 JSON 提取 wheel 下载 URL
             if command -v python3 &>/dev/null; then
-                PY_SCRIPT="import json,sys
+                WHEEL_URL=$(echo "$API_OUT" | python3 -c "
+import json,sys
 data = json.loads(sys.stdin.read())
-assets = data.get('assets', [])
-for a in assets:
+for a in data.get('assets', []):
     if a.get('name','').endswith('.whl'):
         print(a.get('browser_download_url',''))
-        break"
-                WHEEL_URL=$(echo "$API_OUT" | python3 -c "$PY_SCRIPT" 2>/dev/null || true)
-                TAG_NAME=$(echo "$API_OUT" | python3 -c "import json,sys; d=json.loads(sys.stdin.read()); print(d.get('tag_name',''))" 2>/dev/null || true)
+        break
+" 2>/dev/null || true)
+                TAG_NAME=$(echo "$API_OUT" | python3 -c "
+import json,sys
+d=json.loads(sys.stdin.read())
+print(d.get('tag_name',''))
+" 2>/dev/null || true)
             else
                 WHEEL_URL=$(echo "$API_OUT" | grep -o '"browser_download_url": *"[^"]*\.whl"' | head -1 | sed 's/.*: *"//;s/"//' || true)
                 TAG_NAME=$(echo "$API_OUT" | grep -o '"tag_name": *"[^"]*"' | head -1 | sed 's/.*: *"//;s/"//' || true)
             fi
-            WHEEL_NAME=$(echo "$WHEEL_URL" | sed 's/.*\///' || true)
-            if [[ -n "$WHEEL_URL" && -n "$WHEEL_NAME" ]]; then
-                info "下载 wheel: $WHEEL_NAME (${TAG_NAME:-latest}) ..."
-                WHEEL_FILE="$TMP_DIR/$WHEEL_NAME"
-                curl -fsSL --max-time 60 -o "$WHEEL_FILE" "$WHEEL_URL" && WHEEL_PATH="$WHEEL_FILE"
+        fi
+
+        # API 失败时（无 token / 速率限制），通过重定向获取最新 tag 并直接构造 URL
+        if [[ -z "$WHEEL_URL" ]]; then
+            LATEST_TAG=$(curl -sIL -o /dev/null -w '%{url_effective}' "https://github.com/$REPO/releases/latest" 2>/dev/null || true)
+            LATEST_TAG=$(basename "$LATEST_TAG" 2>/dev/null || true)
+            if [[ -n "$LATEST_TAG" ]]; then
+                TAG_NAME="$LATEST_TAG"
+                TAG_VERSION="${LATEST_TAG#v}"
+                WHEEL_URL="https://github.com/$REPO/releases/download/$LATEST_TAG/luna-$TAG_VERSION-py3-none-any.whl"
             fi
+        fi
+
+        WHEEL_NAME=$(echo "$WHEEL_URL" | sed 's/.*\///' || true)
+        if [[ -n "$WHEEL_URL" && -n "$WHEEL_NAME" ]]; then
+            info "下载 wheel: $WHEEL_NAME (${TAG_NAME:-latest}) ..."
+            WHEEL_FILE="$TMP_DIR/$WHEEL_NAME"
+            curl -fsSL --max-time 60 -o "$WHEEL_FILE" "$WHEEL_URL" && WHEEL_PATH="$WHEEL_FILE"
         fi
     fi
 
-    # Fallback: clone source and build locally
+    # Fallback: install from source（无 curl 或 wheel 下载失败时）
     if [[ -z "$WHEEL_PATH" ]]; then
         warn "GitHub Release 未找到 wheel，将从源码构建..."
         if command -v git &>/dev/null; then
