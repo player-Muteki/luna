@@ -193,30 +193,6 @@ if (Test-Path $RustBin) {
     }
 }
 
-# ── 3. Install web frontend dependencies ─────────────────────
-Write-Step "Installing web frontend dependencies"
-$WebDir = & $Python -c "import web, os; print(os.path.dirname(web.__file__))" 2>$null
-if ($WebDir -and (Test-Path (Join-Path $WebDir "package.json"))) {
-    # Check if npm is available
-    $NpmPath = Get-Command "npm" -ErrorAction SilentlyContinue
-    if ($NpmPath) {
-        Write-Info "Installing frontend dependencies (npm install)..."
-        Push-Location $WebDir
-        & npm install --quiet 2>&1 | Out-Null
-        if ($LASTEXITCODE -eq 0) {
-            Write-Info "Frontend dependencies installed"
-        } else {
-            Write-Warn "npm install failed, will retry on first 'luna start'"
-        }
-        Pop-Location
-    } else {
-        Write-Warn "npm not found. Install Node.js (https://nodejs.org/) for best experience"
-        Write-Warn "First 'luna start' will auto-install dependencies"
-    }
-} else {
-    Write-Info "Web frontend package not detected, skipping frontend setup"
-}
-
 # ── 4. Create PATH shortcut ──────────────────────────────
 Write-Step "Configuring system PATH"
 
@@ -263,7 +239,7 @@ foreach ($dir in $LocalPkgsDirs) {
             $f = Join-Path $dir $file
             if (Test-Path $f) { Remove-Item $f -Force -ErrorAction SilentlyContinue }
         }
-        $dirsToRemove = @("core", "api", "web")
+        $dirsToRemove = @("core", "api")
         foreach ($d in $dirsToRemove) {
             $target = Join-Path $dir $d
             if (Test-Path $target) { Remove-Item $target -Recurse -Force -ErrorAction SilentlyContinue }

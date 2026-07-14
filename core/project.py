@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 
 
 def _default_exclude_patterns() -> list[str]:
-    return [".git", "__pycache__", "node_modules", ".venv", ".luna", ".DS_Store"]
+    return [".git", "__pycache__", ".venv", ".luna", ".DS_Store"]
 
 
 def _default_supported_extensions() -> list[str]:

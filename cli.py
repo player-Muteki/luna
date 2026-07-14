@@ -3,8 +3,7 @@ Luna CLI — 工作目录绑定型 RAG 知识库系统。
 
 Usage:
     luna init                   在当前目录创建 .luna/ + 默认配置
-    luna start                  启动 Web UI（FastAPI + Next.js）
-    luna start --port 8080
+    luna start                  启动 API 服务
     luna run "问题"             非交互式一键问答
     luna scan                   扫描工作目录，显示文件索引状态
     luna version                显示版本
@@ -71,19 +70,6 @@ def _get_project_root() -> Path:
             return candidate
         candidate = candidate.parent
     return Path(__file__).resolve().parent
-
-
-def _get_web_dir() -> Path:
-    """返回 web 前端目录。
-
-    优先通过项目源码根目录定位（兼容 PYTHONPATH 干扰场景），
-    回退到 __file__ 所在目录的 web/。
-    """
-    root = _get_project_root()
-    web = root / "web"
-    if web.is_dir():
-        return web
-    return Path(__file__).resolve().parent / "web"
 
 
 def _sanitize_env() -> dict[str, str]:
@@ -256,16 +242,14 @@ def init(
         typer.echo(f"[OK] 已存在: {GLOBAL_CONFIG_PATH}")
 
     typer.echo("")
-    typer.echo("[DONE] 初始化完成！运行 luna start 启动 Web 界面。")
+    typer.echo("[DONE] 初始化完成！运行 luna start 启动 API 服务。")
 
 
 @app.command()
 def start(
-    port: int = typer.Option(3001, "--port", "-p", help="Web UI 端口号"),
-    api_port: int = typer.Option(8765, "--api-port", help="API 服务端口号"),
-    open_browser: bool = typer.Option(True, "--open/--no-open", help="启动后自动打开浏览器"),
+    port: int = typer.Option(8765, "--port", "-p", help="API 服务端口号"),
 ):
-    """启动 Luna Web 界面（FastAPI + Next.js）"""
+    """启动 FastAPI API 服务"""
     cwd = Path.cwd().resolve()
     print(_banner(__version__))
     typer.echo(f"[DIR] 工作目录: {cwd}")
@@ -282,15 +266,7 @@ def start(
 
     os.environ.setdefault("LUNA_ROOT", str(cwd))
 
-    web_dir = _get_web_dir()
-
-    # 检查 Next.js 前端是否存在
-    if web_dir.exists():
-        typer.echo(f"[WEB] 启动 Next.js 前端 (port {port})...")
-        _start_full_stack(web_dir, port, api_port, cwd, open_browser)
-    else:
-        typer.echo(f"[WEB] 前端尚未构建，仅启动 API 服务 (port {api_port})")
-        _start_api_only(api_port, cwd)
+    _start_api(port, cwd)
 
 
 @app.command()
@@ -555,20 +531,6 @@ def scan(
         typer.echo(f"  {status} {f['path']} ({_fmt_size(f['size'])})")
 
 
-def _npm_cmd() -> list[str]:
-    """返回跨平台的 npm 命令列表。"""
-    if sys.platform == "win32":
-        return ["npm.cmd"]
-    return ["npm"]
-
-
-def _npx_cmd() -> list[str]:
-    """返回跨平台的 npx 命令列表。"""
-    if sys.platform == "win32":
-        return ["npx.cmd"]
-    return ["npx"]
-
-
 @app.command()
 def upgrade(
     yes: bool = typer.Option(False, "--yes", "-y", help="跳过确认提示"),
@@ -597,7 +559,6 @@ def upgrade(
     wheel_path = _download_wheel(wheel_url, wheel_sha)
     _install_wheel(wheel_path)
     _cleanup_temp(wheel_path.parent)
-    _clear_nextjs_cache()
 
     typer.echo("[OK] 更新完成！")
     typer.echo(f"版本: {latest}")
@@ -727,16 +688,6 @@ def _cleanup_temp(tmp_dir: Path) -> None:
     shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
-def _clear_nextjs_cache() -> None:
-    """删除前端构建缓存，确保下次 start 时重建。"""
-    next_dir = _get_web_dir() / ".next"
-    if next_dir.exists():
-        typer.echo("[INFO] 清理前端构建缓存以触发重建...")
-        shutil.rmtree(next_dir, ignore_errors=True)
-        typer.echo("[INFO] 下次 luna start 将自动构建新版前端")
-
-
-
 def _write_default_config(path: Path) -> None:
     """写入默认 config.toml。"""
     import tomli_w as tw
@@ -784,92 +735,8 @@ def _write_global_config(api_key: str) -> None:
         os.chmod(path, 0o600)
 
 
-def _start_full_stack(web_dir: Path, port: int, api_port: int, cwd: Path, open_browser: bool = True) -> None:
-    """同时启动 FastAPI 后端和 Next.js 前端。"""
-    api_proc = _start_api_process(api_port, cwd)
-
-    typer.echo("[WEB] 检查 Node.js 环境...")
-    if not _ensure_npm_available():
-        typer.echo("[ERROR] 未检测到 npm，请先安装 Node.js (https://nodejs.org/)")
-        typer.echo("[INFO] 仅启动 API 服务")
-        _start_api_only(api_port, cwd)
-        return
-
-    if not _install_frontend_deps(web_dir):
-        _start_api_only(api_port, cwd)
-        return
-
-    env = _sanitize_env()
-    env["NEXT_PUBLIC_API_URL"] = f"http://localhost:{api_port}"
-    web_proc = _start_nextjs(web_dir, port, env)
-
-    if open_browser:
-        _open_browser(port)
-
-    typer.echo(f"[OK] API: http://localhost:{api_port}")
-    typer.echo(f"[OK] Web: http://localhost:{port}")
-    typer.echo("按 Ctrl+C 停止所有服务")
-
-    try:
-        api_proc.wait()
-    except KeyboardInterrupt:
-        typer.echo("\n[EXIT] 关闭中...")
-        api_proc.terminate()
-        web_proc.terminate()
-        try:
-            api_proc.wait(timeout=5)
-            web_proc.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            api_proc.kill()
-            web_proc.kill()
-        typer.echo("[OK] Luna 已关闭")
-
-
-def _install_frontend_deps(web_dir: Path) -> bool:
-    """安装前端 npm 依赖，成功返回 True。"""
-    node_modules = web_dir / "node_modules"
-    if node_modules.exists():
-        return True
-    typer.echo("[WEB] 正在安装前端依赖 (npm install)...")
-    result = subprocess.run([*_npm_cmd(), "install"], cwd=str(web_dir))
-    if result.returncode != 0:
-        typer.echo("[ERROR] npm install 失败")
-        return False
-    typer.echo("[WEB] 前端依赖安装完成")
-    return True
-
-
-def _start_nextjs(web_dir: Path, port: int, env: dict[str, str]) -> subprocess.Popen:
-    """启动 Next.js 前端进程（生产模式，必要时自动构建）。"""
-    next_build = web_dir / ".next"
-    build_manifest = next_build / "build-manifest.json"
-    if next_build.exists() and build_manifest.exists():
-        typer.echo(f"[WEB] 启动 Next.js 生产服务器 (port {port})...")
-        cmd = [*_npx_cmd(), "next", "start", "--port", str(port)]
-    else:
-        typer.echo("[WEB] 未检测到构建产物，正在构建前端...")
-        typer.echo("[WEB] 首次构建可能需要 30-60 秒...")
-        build_result = subprocess.run(
-            [*_npx_cmd(), "next", "build"], cwd=str(web_dir),
-            capture_output=False,
-        )
-        if build_result.returncode != 0:
-            typer.echo("[ERROR] Next.js 构建失败，启动开发服务器作为降级...")
-            cmd = [*_npx_cmd(), "next", "dev", "--port", str(port)]
-        else:
-            typer.echo(f"[WEB] 构建完成，启动生产服务器 (port {port})...")
-            cmd = [*_npx_cmd(), "next", "start", "--port", str(port)]
-    return subprocess.Popen(cmd, cwd=str(web_dir), env=env)
-
-
-def _open_browser(port: int) -> None:
-    """在默认浏览器中打开指定端口。"""
-    import webbrowser
-    webbrowser.open(f"http://localhost:{port}")
-
-
-def _start_api_only(api_port: int, cwd: Path) -> None:
-    """仅启动 FastAPI API 服务。"""
+def _start_api(api_port: int, cwd: Path) -> None:
+    """启动 FastAPI API 服务。"""
     proc = _start_api_process(api_port, cwd)
     typer.echo(f"[OK] API: http://localhost:{api_port}")
     typer.echo("按 Ctrl+C 停止服务")
@@ -883,46 +750,6 @@ def _start_api_only(api_port: int, cwd: Path) -> None:
         except subprocess.TimeoutExpired:
             proc.kill()
         typer.echo("[OK] Luna 已关闭")
-
-
-def _ensure_npm_available() -> bool:
-    """检测并确保 npm 在 PATH 中可用。"""
-    npm_cmd = _npm_cmd()[0]
-    if shutil.which(npm_cmd) is not None:
-        return True
-    if sys.platform == "win32" and shutil.which("npm") is not None:
-        return True
-    _add_node_paths()
-
-    try:
-        subprocess.run([*_npm_cmd(), "--version"], capture_output=True, timeout=10, check=True)
-        return True
-    except (FileNotFoundError, subprocess.TimeoutExpired, subprocess.CalledProcessError):
-        return False
-
-
-def _add_node_paths() -> None:
-    """将常见 Node.js 安装路径加入 PATH（如未包含）。"""
-    if sys.platform == "win32":
-        candidates = [
-            os.path.expanduser("~\\AppData\\Roaming\\npm"),
-            os.path.expandvars("%ProgramFiles%\\nodejs"),
-            os.path.expandvars("%ProgramFiles(x86)%\\nodejs"),
-        ]
-    else:
-        candidates = [
-            "/opt/homebrew/bin",
-            "/usr/local/bin",
-            os.path.expanduser("~/.nvm/versions/node/*/bin"),
-        ]
-    for path in candidates:
-        if "*" in path:
-            import glob
-            matches = glob.glob(path)
-            if matches:
-                os.environ.setdefault("PATH", f"{matches[-1]}{os.pathsep}{os.environ.get('PATH', '')}")
-        else:
-            os.environ.setdefault("PATH", f"{path}{os.pathsep}{os.environ.get('PATH', '')}")
 
 
 def _start_api_process(api_port: int, cwd: Path) -> subprocess.Popen:

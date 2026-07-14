@@ -34,8 +34,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS — 从环境变量读取，默认为 Next.js 开发/生产服务器地址
-_default_cors = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001"
+# CORS — 从环境变量读取
+_default_cors = "*"
 _cors_origins = os.getenv("CORS_ORIGINS", _default_cors).split(",")
 app.add_middleware(
     CORSMiddleware,

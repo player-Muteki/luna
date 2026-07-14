@@ -233,26 +233,7 @@ else
     fi
 fi
 
-# --- 3. Install frontend dependencies ---
-step "Installing web frontend dependencies"
-WEB_DIR=$("$VENV_DIR/bin/python" -c "import web, os; print(os.path.dirname(web.__file__))" 2>/dev/null || echo "")
-if [[ -n "$WEB_DIR" && -f "$WEB_DIR/package.json" ]]; then
-    if command -v npm &>/dev/null; then
-        info "安装前端依赖 (npm install)..."
-        if (cd "$WEB_DIR" && npm install --quiet) 2>&1; then
-            info "前端依赖安装完成"
-        else
-            warn "npm install 失败，首次 Luna start 时会自动安装"
-        fi
-    else
-        warn "npm 未安装，首次 Luna start 时会自动安装"
-        warn "推荐安装 Node.js (https://nodejs.org/) 以获得更快的启动体验"
-    fi
-else
-    info "web 前端包未检测到，跳过前端构建"
-fi
-
-# --- 4. Create PATH link ---
+# --- 3. Create PATH link ---
 step "Setting up PATH"
 
 BIN_DIR="$HOME/.local/bin"
@@ -272,7 +253,7 @@ fi
 ln -s "$VENV_DIR/bin/luna" "$LINK2"
 info "Created link: $LINK2 -> $VENV_DIR/bin/luna"
 
-# --- 5. Check PATH ---
+# --- 4. Check PATH ---
 step "Checking PATH"
 SHELL_RC=""
 if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
@@ -295,7 +276,7 @@ else
     info "PATH already includes $BIN_DIR"
 fi
 
-# --- 6. Clean up old Luna files in .local-pkgs ---
+# --- 5. Clean up old Luna files in .local-pkgs ---
 step "Cleaning up old Luna files"
 # 如果 PYTHONPATH 中包含 .local-pkgs 目录，其中有老版本 Luna 文件，
 # 会导致 import cli 加载旧版。这里遍历清理。
@@ -313,13 +294,13 @@ for dir in $OLD_PYTHONPATH_DIRS; do
     if [[ -d "$dir" ]]; then
         info "清理 $dir 中的旧 Luna 文件..."
         rm -f "$dir/cli.py" "$dir/__version__.py" "$dir/config.py"
-        rm -rf "$dir/core" "$dir/api" "$dir/web"
+        rm -rf "$dir/core" "$dir/api"
         rm -rf "$dir/luna-"*.dist-info
         info "  ✅ 已清理"
     fi
 done
 
-# --- 7. Cleanup ---
+# --- 6. Cleanup ---
 if [[ -n "${TMP_DIR:-}" && -d "$TMP_DIR" ]]; then
     rm -rf "$TMP_DIR"
 fi

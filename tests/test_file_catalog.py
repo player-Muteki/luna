@@ -170,18 +170,6 @@ class TestExclusions:
         assert "readme.md" in {f["path"] for f in browse_files if not f["is_dir"]}
         assert all(".git" not in p.parts for p in ingest_files)
 
-    def test_exclude_patterns(self, tmp_path) -> None:
-        (tmp_path / "node_modules" / "pkg").mkdir(parents=True)
-        (tmp_path / "node_modules" / "pkg" / "index.js").write_text("x", encoding="utf-8")
-        (tmp_path / "app.js").write_text("x", encoding="utf-8")
-
-        catalog = _make_catalog(tmp_path, exclude_patterns=[".git", "__pycache__", "node_modules"])
-        browse_files = catalog.browse()
-        ingest_files = catalog.ingest_candidates()
-
-        assert "app.js" in {f["path"] for f in browse_files if not f["is_dir"]}
-        assert all("node_modules" not in p.parts for p in ingest_files)
-
     def test_luna_excluded(self, tmp_path) -> None:
         """.luna 目录及其内容不应出现在扫描结果中。"""
         (tmp_path / ".luna" / "config.toml").parent.mkdir(parents=True)
