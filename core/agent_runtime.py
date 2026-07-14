@@ -156,6 +156,10 @@ class RustAgentRuntime:
         if candidate.exists():
             return [str(candidate)]
 
+        on_path = shutil.which(binary_name)
+        if on_path:
+            return [on_path]
+
         cargo = shutil.which("cargo")
         if cargo:
             return [cargo, "run", "--quiet", "--package", "luna-agent-runtime", "--"]
