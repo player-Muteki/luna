@@ -25,16 +25,10 @@ import typer
 
 from __version__ import __version__
 
-BANNER = r"""
- _                    
-| |                   
-| |     ___  _ __ ___ 
-| |    / _ \| '__/ _ \
-| |___| (_) | | |  __/
-|______\___/|_|  \___|
+BANNER_SUBTITLE = "基于 RAG 的工作目录知识库  v{version}"
+BANNER_YELLOW = "\033[38;5;229m"
+BANNER_RESET = "\033[0m"
 
-  基于 RAG 的工作目录知识库  v{version}
-"""
 
 app = typer.Typer(
     name="luna",
@@ -108,7 +102,72 @@ def _sanitize_env() -> dict[str, str]:
 
 
 def _banner(version: str) -> str:
-    return BANNER.format(version=version)
+    try:
+        art = _render_ascii_banner()
+    except Exception:
+        art = "luna"
+    return f"{BANNER_YELLOW}{art}{BANNER_RESET}\n\n  {BANNER_SUBTITLE.format(version=version)}\n"
+
+
+def _render_ascii_banner() -> str:
+    return _join_ascii_blocks(_render_ascii_moon(), _render_ascii_text())
+
+
+def _render_ascii_moon() -> str:
+    from PIL import Image, ImageDraw
+
+    width, height = 11, 6
+    size = 180
+    image = Image.new("L", (size, size), 0)
+    draw = ImageDraw.Draw(image)
+    draw.ellipse((18, 16, 166, 164), fill=255)
+    draw.ellipse((64, 8, 184, 156), fill=0)
+
+    bbox = image.getbbox()
+    if bbox:
+        image = image.crop(bbox)
+
+    image = image.resize((width, height), Image.Resampling.LANCZOS)
+    pixels = image.load()
+    mask = [[pixels[x, y] >= 96 for x in range(width)] for y in range(height)]
+    chars = [[" " for _ in range(width)] for _ in range(height)]
+
+    for y in range(height):
+        for x in range(width):
+            if mask[y][x]:
+                chars[y][x] = "█"
+
+    for y in range(height):
+        for x in range(width):
+            if not mask[y][x]:
+                continue
+            for dx, dy, shadow in ((1, 0, "╗"), (0, 1, "╚"), (1, 1, "╝")):
+                nx, ny = x + dx, y + dy
+                if nx >= width or ny >= height or mask[ny][nx]:
+                    continue
+                chars[ny][nx] = shadow
+
+    return "\n".join(line for row in chars if (line := "".join(row).rstrip()).strip())
+
+
+def _render_ascii_text() -> str:
+    import pyfiglet
+
+    return pyfiglet.figlet_format("luna", font="ansi_shadow", width=120).rstrip()
+
+
+def _join_ascii_blocks(left: str, right: str, gap: int = 4) -> str:
+    left_lines = left.splitlines()
+    right_lines = right.splitlines()
+    height = max(len(left_lines), len(right_lines))
+    left_width = max(len(line) for line in left_lines)
+    top_padding = max(0, (height - len(left_lines)) // 2)
+    left_lines = [""] * top_padding + left_lines + [""] * (height - len(left_lines) - top_padding)
+    right_lines = right_lines + [""] * (height - len(right_lines))
+    return "\n".join(
+        f"{left_line:<{left_width}}{' ' * gap}{right_line}".rstrip()
+        for left_line, right_line in zip(left_lines, right_lines)
+    )
 
 
 def _setup_project_context(explicit_root: str | None = None) -> object:

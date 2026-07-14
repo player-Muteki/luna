@@ -33,6 +33,8 @@ dependencies = [
     "openai>=1.0.0",
     # CLI
     "typer>=0.9.0",
+    "pillow>=10.0.0",
+    "pyfiglet>=1.0.0",
     # Env file
     "python-dotenv>=1.0.0",
     # Config
