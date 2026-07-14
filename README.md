@@ -25,16 +25,28 @@
 
 ### 安装
 
-**Linux / macOS**
+**方式一：国内镜像（jsDelivr CDN）**
 
 ```bash
+# Linux / macOS
 curl -fsSL 'https://cdn.jsdelivr.net/gh/player-Muteki/luna@main/install.sh' | bash
 ```
 
-**Windows（PowerShell 管理员）**
+```powershell
+# Windows（PowerShell 管理员）
+powershell -ExecutionPolicy Bypass -c "curl.exe -fsSL -o $env:TEMP\install.ps1 'https://cdn.jsdelivr.net/gh/player-Muteki/luna@main/install.ps1'; & $env:TEMP\install.ps1"
+```
+
+**方式二：直接下载（GitHub）**
+
+```bash
+# Linux / macOS
+curl -fsSL 'https://raw.githubusercontent.com/player-Muteki/luna/main/install.sh' | bash
+```
 
 ```powershell
-powershell -ExecutionPolicy Bypass -c "curl.exe -fsSL -o $env:TEMP\install.ps1 'https://cdn.jsdelivr.net/gh/player-Muteki/luna@main/install.ps1'; & $env:TEMP\install.ps1"
+# Windows（PowerShell 管理员）
+powershell -ExecutionPolicy Bypass -c "curl.exe -fsSL -o $env:TEMP\install.ps1 'https://raw.githubusercontent.com/player-Muteki/luna/main/install.ps1'; & $env:TEMP\install.ps1"
 ```
 
 ### 启动
